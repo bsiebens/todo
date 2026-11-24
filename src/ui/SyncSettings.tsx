@@ -69,19 +69,32 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
   const [sent, setSent] = useState(false);
   const { busy, error, run } = useBusy();
 
-  useEffect(() => {
+  const check = useCallback(() => {
+    setServer(null);
     sync.authStatus().then(setServer, () => setServer('unreachable'));
   }, [sync]);
+  useEffect(check, [check]);
 
   const done = (r: SignInResult) => sync.signedInWith(r);
 
   if (server === null) return <div className="card muted small">Looking for the sync server…</div>;
   if (server === 'unreachable') {
+    const local = ['localhost', '127.0.0.1'].includes(location.hostname);
     return (
       <div className="card">
-        <p className="small muted" style={{ margin: 0 }}>
-          No sync server answers at this address. Sync works when the app is opened from your ToDo server (for example https://todo.your-domain). Your tasks are safe on this device either way.
+        <p className="small" style={{ marginTop: 0 }}>
+          <strong>No sync server answers at this address</strong>, so there is nowhere to enter a code yet. Your tasks are safe on this device either way.
         </p>
+        {local ? (
+          <p className="small muted">
+            Running locally? Start the sync server in a second terminal with <code>npm run dev:server</code> (no database needed), then press Try again. The setup code is printed in that terminal.
+          </p>
+        ) : (
+          <p className="small muted">Sync works when the app is opened from your ToDo server (for example https://todo.your-domain). If that is this address, the server may be down or restarting.</p>
+        )}
+        <div className="actions" style={{ marginBottom: 0 }}>
+          <button className="btn" onClick={check}>Try again</button>
+        </div>
       </div>
     );
   }

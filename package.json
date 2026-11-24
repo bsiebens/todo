@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:server": "npm run build:server && APP_URL=http://localhost:5173 STATIC_DIR=dist node dist-server/server.cjs",
+    "dev:server": "esbuild server/dev.ts --bundle --platform=node --target=node22 --format=cjs --external:pg-native --external:@electric-sql/pglite --outfile=dist-server/dev.cjs --log-level=warning && node dist-server/dev.cjs",
     "build": "tsc -b && tsc -p server && vite build && npm run build:server",
     "build:server": "esbuild server/main.ts --bundle --platform=node --target=node22 --format=cjs --external:pg-native --outfile=dist-server/server.cjs --log-level=warning",
     "start": "node dist-server/server.cjs",

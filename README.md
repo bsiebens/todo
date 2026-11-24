@@ -31,7 +31,18 @@ npm test           # unit and server tests (the server tests use an in-process P
 npm run build      # web app in dist/, server bundle in dist-server/
 ```
 
-To work on sync locally, run Postgres and then `DATABASE_URL=postgres://... npm run dev:server` next to `npm run dev`; Vite forwards `/api` to it.
+### Testing sync locally
+
+`npm run dev` alone has no sync server, so Settings shows "No sync server answers at this address" and there is no code field. Start the server in a second terminal:
+
+```sh
+npm run dev:server   # sync server on :8080 with an in-process Postgres, data in .dev-data/
+npm run dev          # the app on http://localhost:5173, forwards /api to :8080
+```
+
+The setup code is printed by `dev:server`. To try a second device, open http://localhost:5173 in a private window or another browser, then use **Show a one-time code** on the first one. Passkeys work on localhost too. Delete `.dev-data/` to start over.
+
+To test the real container setup instead, use `deploy/docker-compose.yml` with `APP_URL=http://localhost:8080` and open that address.
 
 ## Running it on the home server
 
