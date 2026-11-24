@@ -20,28 +20,29 @@ export function DesktopNotifications() {
   const { error, run } = useRun();
   return (
     <>
-      <div className="setting-row">
-        <div>
-          <div>Notifications on this computer</div>
-          <div className="small muted">{prefs.notifications ? 'On. Reminders show while ToDo runs, also when it is closed to the tray.' : 'Off. Turn on to get reminders here.'}</div>
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">Notifications on this computer</div>
+          <div className="srow-sub">
+            {!prefs.notifications
+              ? 'Off. Turn on to get reminders here.'
+              : tested
+                ? 'Test sent. If nothing appeared, allow notifications for ToDo in the system settings.'
+                : 'On. Reminders show while ToDo runs, also when it is closed to the tray.'}
+          </div>
         </div>
-        <div className="actions" style={{ margin: 0 }}>
+        <div className="srow-actions">
           {prefs.notifications && (
             <button className="btn" onClick={() => run(async () => (await showNotification('ToDo reminders work', 'You will get reminders like this one.'), setTested(true)))}>
               Send a test
             </button>
           )}
-          <button className={`btn${prefs.notifications ? '' : ' primary'}`} onClick={() => run(() => updateDesktopPrefs({ notifications: !prefs.notifications }))}>
+          <button className={`btn${prefs.notifications ? '' : ' primary'}`} onClick={() => run(async () => (await updateDesktopPrefs({ notifications: !prefs.notifications }), setTested(false)))}>
             {prefs.notifications ? 'Turn off' : 'Turn on'}
           </button>
         </div>
       </div>
-      {tested && <p className="small muted">Sent. If nothing appeared, check that notifications for ToDo are allowed in the system settings.</p>}
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <p className="form-error srow-msg" role="alert">{error}</p>}
     </>
   );
 }
@@ -49,7 +50,7 @@ export function DesktopNotifications() {
 function ShortcutInput({ value, onChange }: { value: string; onChange: (acc: string) => void }) {
   const [recording, setRecording] = useState(false);
   return (
-    <div className="inline">
+    <div className="srow-actions">
       <input
         aria-label="Quick add shortcut"
         readOnly
@@ -82,6 +83,7 @@ export function DesktopSettings() {
   const prefs = usePrefs();
   const [autostart, setAutostart] = useState<boolean | null>(null);
   const { error, run } = useRun();
+  const tray = isMac ? 'menu bar' : 'tray';
 
   useEffect(() => {
     launchAtLogin().then(setAutostart, () => setAutostart(false));
@@ -90,18 +92,26 @@ export function DesktopSettings() {
   const set = (patch: Partial<DesktopPrefs>) => run(() => updateDesktopPrefs(patch));
 
   return (
-    <div className="card">
-      <div className="fields">
-        <label>Quick add from anywhere</label>
+    <div className="card scard">
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">Quick add from anywhere</div>
+          <div className="srow-sub">Brings ToDo up with a new task ready, from any app. Click the field and press the keys you want.</div>
+        </div>
         <ShortcutInput value={prefs.hotkey} onChange={(hotkey) => set({ hotkey })} />
-        <label htmlFor="d-tray">Close button</label>
-        <label className="toggle">
-          <input id="d-tray" type="checkbox" checked={prefs.closeToTray} onChange={(e) => set({ closeToTray: e.target.checked })} /> Keep running in the {isMac ? 'menu bar' : 'tray'}
+      </div>
+      <div className="srow">
+        <label className="scheck">
+          <input type="checkbox" checked={prefs.closeToTray} onChange={(e) => set({ closeToTray: e.target.checked })} />
+          <span className="srow-text">
+            <span className="srow-title">Keep running in the {tray}</span>
+            <span className="srow-sub">The close button hides ToDo so reminders keep coming. {isMac ? '⌘Q' : 'Ctrl+Q'} or the {tray} icon quits.</span>
+          </span>
         </label>
-        <label htmlFor="d-login">At login</label>
-        <label className="toggle">
+      </div>
+      <div className="srow">
+        <label className="scheck">
           <input
-            id="d-login"
             type="checkbox"
             disabled={autostart === null}
             checked={!!autostart}
@@ -109,18 +119,15 @@ export function DesktopSettings() {
               const on = e.target.checked;
               run(async () => (await setLaunchAtLogin(on), setAutostart(on)));
             }}
-          />{' '}
-          Start ToDo in the {isMac ? 'menu bar' : 'tray'}
+          />
+          <span className="srow-text">
+            <span className="srow-title">Start at login</span>
+            <span className="srow-sub">Opens quietly in the {tray}.</span>
+          </span>
         </label>
       </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      <p className="small muted" style={{ marginBottom: 0 }}>
-        These settings are for this computer only. {isMac ? '⌘Q' : 'Ctrl+Q'} quits ToDo; you can also quit from the {isMac ? 'menu bar' : 'tray'} icon.
-      </p>
+      <p className="srow-note">These settings are for this computer only.</p>
+      {error && <p className="form-error srow-msg" role="alert">{error}</p>}
     </div>
   );
 }

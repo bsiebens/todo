@@ -110,6 +110,9 @@ export class SyncClient {
     if (init.body !== undefined) headers['content-type'] = 'application/json';
     if (init.auth !== false && this.token) headers.authorization = `Bearer ${this.token}`;
     const res = await this.f(`${this.base}/api${path}`, { method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'), headers, body: init.body !== undefined ? JSON.stringify(init.body) : undefined });
+    const isJson = (res.headers.get('content-type') ?? '').includes('application/json');
+    // Anything but JSON (a dev server or proxy page, a 502 from a proxy) means no sync server answered.
+    if (!isJson) throw new ApiError(res.ok ? 502 : res.status, 'No sync server answers at this address');
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     if (!res.ok) {
       if (res.status === 401 && init.auth !== false && this.token) await this.forget('This device was signed out.');

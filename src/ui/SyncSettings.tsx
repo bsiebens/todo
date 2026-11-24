@@ -74,87 +74,148 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
   const { busy, error, run } = useBusy();
 
   const [address, setAddress] = useState(sync.baseUrl);
-  const [lookup, setLookup] = useState(0);
 
-  useEffect(() => {
-    // The desktop app has no server of its own origin: ask only once an address is set.
+  const check = useCallback(() => {
+    // The desktop app isn't served by the sync server: ask only once an address is set.
     if (isDesktop && !sync.baseUrl) return setServer('unreachable');
     setServer(null);
     sync.authStatus().then(setServer, () => setServer('unreachable'));
-  }, [sync, lookup]);
+  }, [sync]);
+  useEffect(check, [check]);
+
+  const connect = () =>
+    run(async () => {
+      const url = normalizeServerUrl(address);
+      setAddress(url);
+      await sync.setBaseUrl(url);
+      check();
+    });
+  const changeServer = () => run(async () => (await sync.setBaseUrl(''), check()));
 
   const done = (r: SignInResult) => sync.signedInWith(r);
 
-  // Desktop app: the server's address comes first.
-  const serverForm = isDesktop && (
-    <form
-      className="inline-form"
-      onSubmit={(e) => (
-        e.preventDefault(),
-        run(async () => {
-          const url = normalizeServerUrl(address);
-          setAddress(url);
-          await sync.setBaseUrl(url);
-          setLookup((n) => n + 1);
-        })
-      )}
-    >
-      <input aria-label="Server address" placeholder="https://todo.your-domain" value={address} onChange={(e) => setAddress(e.target.value)} autoCapitalize="none" autoComplete="url" spellCheck={false} />
-      <button className="btn" disabled={busy || !address.trim()}>Connect</button>
-    </form>
-  );
-
-  if (server === null) return <div className="card muted small">Looking for the sync server…</div>;
-  if (server === 'unreachable') {
+  if (server === null)
     return (
-      <div className="card">
-        {isDesktop ? (
-          <>
-            <p className="small muted" style={{ marginTop: 0 }}>
-              {sync.baseUrl ? `No ToDo server answers at ${sync.baseUrl}. Check the address and that this computer can reach it.` : 'Type the address of your ToDo server to sync this computer with your other devices.'} Your tasks are safe on this computer either way.
-            </p>
-            {serverForm}
-            {error && <p className="form-error" role="alert">{error}</p>}
-          </>
-        ) : (
-          <p className="small muted" style={{ margin: 0 }}>
-            No sync server answers at this address. Sync works when the app is opened from your ToDo server (for example https://todo.your-domain). Your tasks are safe on this device either way.
+      <div className="card scard">
+        <div className="srow">
+          <div className="srow-sub">Looking for the sync server…</div>
+        </div>
+      </div>
+    );
+  if (server === 'unreachable' && isDesktop) {
+    return (
+      <div className="card scard">
+        <div className="srow">
+          <div className="srow-text">
+            <div className="srow-title">
+              {sync.baseUrl ? (
+                <>
+                  <span className="syncdot s-offline" aria-hidden="true" /> No ToDo server answers at {sync.baseUrl}
+                </>
+              ) : (
+                'Server address'
+              )}
+            </div>
+            <div className="srow-sub">
+              {sync.baseUrl ? 'Check the address and that this computer can reach it.' : 'Type the address of your ToDo server to sync this computer with your other devices.'} Your tasks are safe on
+              this computer either way.
+            </div>
+          </div>
+          <form className="srow-form" onSubmit={(e) => (e.preventDefault(), connect())}>
+            <input
+              aria-label="Server address"
+              placeholder="https://todo.your-domain"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              autoCapitalize="none"
+              autoComplete="url"
+              spellCheck={false}
+            />
+            <button className="btn primary" disabled={busy || !address.trim()}>
+              Connect
+            </button>
+          </form>
+        </div>
+        {error && (
+          <p className="form-error srow-msg" role="alert">
+            {error}
           </p>
         )}
       </div>
     );
   }
+  if (server === 'unreachable') {
+    const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+    return (
+      <div className="card scard">
+        <div className="srow">
+          <div className="srow-text">
+            <div className="srow-title">
+              <span className="syncdot s-offline" aria-hidden="true" /> No sync server answers at this address
+            </div>
+            <div className="srow-sub">
+              {local ? (
+                <>
+                  Running locally? Start it in a second terminal with <code>npm run dev:server</code> (no database needed); the setup code is printed there.
+                </>
+              ) : (
+                'Sync works when the app is opened from your ToDo server. If that is this address, the server may be down or restarting.'
+              )}{' '}
+              Your tasks are safe on this device either way.
+            </div>
+          </div>
+          <button className="btn" onClick={check}>Try again</button>
+        </div>
+      </div>
+    );
+  }
+
+  const codeForm = (label: string, submit: () => Promise<unknown>, button: string, primary = false) => (
+    <form className="srow-form" onSubmit={(e) => (e.preventDefault(), run(submit))}>
+      <input aria-label={label} placeholder="XXXX-XXXX" value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="one-time-code" />
+      <button className={`btn${primary ? ' primary' : ''}`} disabled={busy || !code.trim()}>{button}</button>
+    </form>
+  );
 
   return (
-    <div className="card">
+    <div className="card scard">
+      {status.error && <p className="form-error srow-msg" role="alert">{status.error}</p>}
       {isDesktop && (
-        <p className="small muted" style={{ marginTop: 0 }}>
-          Server: {sync.baseUrl}{' '}
-          <button className="linkbtn" onClick={() => run(async () => (await sync.setBaseUrl(''), setAddress(''), setLookup((n) => n + 1)))}>Change</button>
-        </p>
+        <div className="srow">
+          <div className="srow-text">
+            <div className="srow-title">Server</div>
+            <div className="srow-sub">{sync.baseUrl}</div>
+          </div>
+          <button className="btn" disabled={busy} onClick={changeServer}>
+            Change
+          </button>
+        </div>
       )}
-      {status.error && <p className="form-error" role="alert">{status.error}</p>}
-      <p className="small muted" style={{ marginTop: 0 }}>
-        Sign in to keep this device in step with your others. Tasks stay on this device too and keep working offline.
-      </p>
-      <div className="fields">
-        <label htmlFor="devname">This device</label>
-        <input id="devname" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">This device</div>
+          <div className="srow-sub">Sign in to keep this device in step with your others. Tasks stay here too and work offline.</div>
+        </div>
+        <input className="srow-input" aria-label="Device name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
       </div>
 
       {!server.setupDone ? (
-        <>
-          <h3 className="subhead">Set up the server</h3>
-          <p className="small muted">This is the first device. Enter the setup code from the server log (<code>docker compose logs app</code>).</p>
-          <form className="inline-form" onSubmit={(e) => (e.preventDefault(), run(async () => done(await sync.api('/auth/setup', { body: { code, deviceName: name }, auth: false }))))}>
-            <input aria-label="Setup code" placeholder="XXXX-XXXX" value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="off" />
-            <button className="btn primary" disabled={busy || !code.trim()}>Set up</button>
-          </form>
-        </>
+        <div className="srow">
+          <div className="srow-text">
+            <div className="srow-title">Set up the server</div>
+            <div className="srow-sub">This is the first device. The setup code is in the server log (<code>docker compose logs app</code>).</div>
+          </div>
+          {codeForm('Setup code', async () => done(await sync.api('/auth/setup', { body: { code, deviceName: name }, auth: false })), 'Set up', true)}
+        </div>
       ) : (
         <>
+          {/* Passkeys are tied to the server's web address, which the desktop app isn't loaded from. */}
           {!isDesktop && (
-            <div className="actions" style={{ marginTop: 14 }}>
+            <div className="srow">
+              <div className="srow-text">
+                <div className="srow-title">Passkey</div>
+                <div className="srow-sub">Face ID, Touch ID or Windows Hello, if you added a passkey on another device.</div>
+              </div>
               <button
                 className="btn primary"
                 disabled={busy}
@@ -170,31 +231,37 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
               </button>
             </div>
           )}
-          <h3 className="subhead">{isDesktop ? 'Sign in with a one-time code' : 'Or use a one-time code'}</h3>
-          <p className="small muted">Get one on a signed-in device under Settings, Sync, Add a device{server.emailEnabled ? ', or by email below' : ''}.</p>
-          <form className="inline-form" onSubmit={(e) => (e.preventDefault(), run(async () => done(await sync.api('/auth/code/redeem', { body: { code, deviceName: name }, auth: false }))))}>
-            <input aria-label="One-time code" placeholder="XXXX-XXXX" value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="one-time-code" />
-            <button className="btn" disabled={busy || !code.trim()}>Sign in</button>
-          </form>
+          <div className="srow">
+            <div className="srow-text">
+              <div className="srow-title">One-time code</div>
+              <div className="srow-sub">Shown on a signed-in device under Settings, Add a device{server.emailEnabled ? ', or sent by email' : ''}.</div>
+            </div>
+            {codeForm('One-time code', async () => done(await sync.api('/auth/code/redeem', { body: { code, deviceName: name }, auth: false })), 'Sign in')}
+          </div>
           {server.emailEnabled && (
-            <form
-              className="inline-form"
-              onSubmit={(e) => (
-                e.preventDefault(),
-                run(async () => {
-                  await sync.api('/auth/email', { body: { email }, auth: false });
-                  setSent(true);
-                })
-              )}
-            >
-              <input type="email" aria-label="Email address" placeholder="Your email address" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-              <button className="btn" disabled={busy || !email.includes('@')}>Email me a code</button>
-            </form>
+            <div className="srow">
+              <div className="srow-text">
+                <div className="srow-title">Code by email</div>
+                <div className="srow-sub">{sent ? "If that is the owner's address, a code is on its way. Type it above." : 'Only the owner address receives a code.'}</div>
+              </div>
+              <form
+                className="srow-form"
+                onSubmit={(e) => (
+                  e.preventDefault(),
+                  run(async () => {
+                    await sync.api('/auth/email', { body: { email }, auth: false });
+                    setSent(true);
+                  })
+                )}
+              >
+                <input type="email" aria-label="Email address" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+                <button className="btn" disabled={busy || !email.includes('@')}>Send code</button>
+              </form>
+            </div>
           )}
-          {sent && <p className="small muted">If that is the owner's address, a code is on its way. Type it above.</p>}
         </>
       )}
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <p className="form-error srow-msg" role="alert">{error}</p>}
     </div>
   );
 }
@@ -218,55 +285,54 @@ function SignedIn() {
     return () => clearInterval(t);
   }, []);
 
-  const label =
-    status.state === 'syncing'
-      ? 'Syncing…'
-      : status.state === 'offline'
-        ? `Server not reachable, will retry${status.pending ? `. ${status.pending} change${status.pending === 1 ? '' : 's'} waiting` : ''}`
-        : status.state === 'error'
-          ? `Sync problem: ${status.error}`
-          : `Up to date, last synced ${ago(status.lastSync)}`;
+  const title =
+    status.state === 'syncing' ? 'Syncing…' : status.state === 'offline' ? 'Server not reachable' : status.state === 'error' ? 'Sync problem' : 'Up to date';
+  const sub =
+    status.state === 'offline'
+      ? `Will retry automatically${status.pending ? `. ${status.pending} change${status.pending === 1 ? '' : 's'} waiting` : ''}.`
+      : status.state === 'error'
+        ? status.error
+        : `Last synced ${ago(status.lastSync)}`;
+  const pairLive = pair && new Date(pair.expiresAt).getTime() > Date.now();
 
   return (
-    <div className="card">
-      <div className="setting-row">
-        <div className="syncline">
-          <span className={`syncdot s-${status.state}`} aria-hidden="true" />
-          <span>{label}</span>
+    <div className="card scard">
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">
+            <span className={`syncdot s-${status.state}`} aria-hidden="true" /> {title}
+          </div>
+          <div className="srow-sub">{sub}</div>
         </div>
-        <button className="btn" onClick={() => sync.syncNow()} disabled={status.state === 'syncing'}>Sync now</button>
+        <button className="btn" onClick={() => sync.syncNow()} disabled={status.state === 'syncing'}>
+          <Icon name="repeat" size={15} /> Sync now
+        </button>
       </div>
 
-      <h3 className="subhead">Add a device</h3>
-      {pair && new Date(pair.expiresAt).getTime() > Date.now() ? (
-        <p className="small">
-          On the other device, open Settings, Sync and type <strong className="code">{pair.code}</strong>. It works once, until{' '}
-          {new Date(pair.expiresAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}.
-        </p>
-      ) : (
-        <div className="actions">
-          <button className="btn" disabled={busy} onClick={() => run(async () => setPair(await sync.api('/auth/code/create', { body: {} })))}>Show a one-time code</button>
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">Add a device</div>
+          <div className="srow-sub">
+            {pairLive
+              ? `On the other device, open Settings and type this code. It works once, until ${new Date(pair!.expiresAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}.`
+              : 'Show a one-time code to type on the other device.'}
+          </div>
         </div>
-      )}
+        {pairLive ? (
+          <strong className="code">{pair!.code}</strong>
+        ) : (
+          <button className="btn" disabled={busy} onClick={() => run(async () => setPair(await sync.api('/auth/code/create', { body: {} })))}>Show code</button>
+        )}
+      </div>
 
-      <h3 className="subhead">Passkeys</h3>
-      {passkeys.length ? (
-        <ul className="plainlist">
-          {passkeys.map((p) => (
-            <li key={p.id}>
-              <span>{p.name}</span>
-              <span className="small muted">used {ago(p.lastUsedAt)}</span>
-              <button className="btn ghost danger" onClick={() => run(async () => (await sync.api(`/auth/passkeys/${encodeURIComponent(p.id)}`, { method: 'DELETE' }), load()))}>Remove</button>
-            </li>
-          ))}
-        </ul>
-      ) : isDesktop ? null : (
-        <p className="small muted">No passkeys yet. A passkey lets you sign in on new devices with Face ID, Touch ID or Windows Hello.</p>
-      )}
-      {isDesktop ? (
-        <p className="small muted">Passkeys are added in the browser or on your phone. The desktop app signs in with a one-time code.</p>
-      ) : (
-        <div className="actions">
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">Passkeys</div>
+          <div className="srow-sub">
+            {isDesktop ? 'Add passkeys in the browser or on your phone. The desktop app signs in with a one-time code.' : `Sign in on new devices with Face ID, Touch ID or Windows Hello.${passkeys.length ? '' : ' None yet.'}`}
+          </div>
+        </div>
+        {!isDesktop && (
           <button
             className="btn"
             disabled={busy}
@@ -280,31 +346,48 @@ function SignedIn() {
               })
             }
           >
-            <Icon name="key" size={16} /> Add a passkey on this device
+            <Icon name="key" size={15} /> Add passkey
           </button>
-        </div>
-      )}
-
-      <h3 className="subhead">Signed-in devices</h3>
-      <ul className="plainlist">
-        {devices.map((d) => (
-          <li key={d.id}>
-            <span>
-              {d.name}
-              {d.current && <span className="chip" style={{ marginLeft: 6 }}>this device</span>}
-            </span>
-            <span className="small muted">{d.current ? '' : `seen ${ago(d.lastSeenAt)}`}</span>
-            {!d.current && (
-              <button className="btn ghost danger" onClick={() => run(async () => (await sync.api(`/devices/${d.id}`, { method: 'DELETE' }), load()))}>Sign out</button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <div className="actions">
-        <button className="btn danger" onClick={() => run(() => sync.signOut())}>Sign out this device</button>
+        )}
+        {passkeys.length > 0 && (
+          <ul className="slist">
+            {passkeys.map((p) => (
+              <li key={p.id}>
+                <Icon name="key" size={15} />
+                <span className="slist-name">{p.name}</span>
+                <span className="slist-meta">used {ago(p.lastUsedAt)}</span>
+                <button className="btn ghost danger small" onClick={() => run(async () => (await sync.api(`/auth/passkeys/${encodeURIComponent(p.id)}`, { method: 'DELETE' }), load()))}>Remove</button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      <p className="small muted" style={{ marginBottom: 0 }}>Signing out keeps the tasks on this device, but stops syncing them.</p>
-      {error && <p className="form-error" role="alert">{error}</p>}
+
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">Signed-in devices</div>
+          <div className="srow-sub">Signing out keeps the tasks on that device, but stops syncing them.</div>
+        </div>
+        <ul className="slist">
+          {devices.map((d) => (
+            <li key={d.id}>
+              <Icon name="system" size={15} />
+              <span className="slist-name">
+                {d.name}
+                {d.current && <span className="chip">this device</span>}
+              </span>
+              {!d.current && <span className="slist-meta">seen {ago(d.lastSeenAt)}</span>}
+              <button
+                className="btn ghost danger small"
+                onClick={() => run(async () => (d.current ? sync.signOut() : (await sync.api(`/devices/${d.id}`, { method: 'DELETE' }), load())))}
+              >
+                Sign out
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {error && <p className="form-error srow-msg" role="alert">{error}</p>}
     </div>
   );
 }
@@ -318,35 +401,49 @@ function Reminders() {
 
   // The desktop app shows reminders itself; elsewhere the sync server sends them by Web Push.
   if (status.state === 'signed_out' && !isDesktop) {
-    return <div className="card small muted">Reminders are sent by the sync server, so sign in first.</div>;
+    return (
+      <div className="card scard">
+        <div className="srow">
+          <div className="srow-text">
+            <div className="srow-title">Not available yet</div>
+            <div className="srow-sub">Reminders are sent by the sync server, so sign in first.</div>
+          </div>
+        </div>
+      </div>
+    );
   }
   const save = (patch: Partial<typeof r>) => store.saveSettings({ reminders: { ...r, ...patch } });
 
   return (
-    <div className="card">
+    <div className="card scard">
       {isDesktop ? <DesktopNotifications /> : <WebPushNotifications />}
 
-      <div className="fields" style={{ marginTop: 14 }}>
-        <label htmlFor="rem-due">Due time</label>
-        <div className="inline">
-          <label className="toggle">
-            <input id="rem-due" type="checkbox" checked={r.atDueTime} onChange={(e) => save({ atDueTime: e.target.checked })} /> Remind me
-          </label>
-          <select aria-label="When" value={r.leadMin} disabled={!r.atDueTime} onChange={(e) => save({ leadMin: Number(e.target.value) })}>
-            {LEADS.map((m) => (
-              <option key={m} value={m}>{m ? `${m} min before` : 'at the due time'}</option>
-            ))}
-          </select>
-        </div>
-        <label htmlFor="rem-digest">Morning</label>
-        <div className="inline">
-          <label className="toggle">
-            <input id="rem-digest" type="checkbox" checked={r.digest} onChange={(e) => save({ digest: e.target.checked })} /> Summary of today and overdue at
-          </label>
-          <input type="time" aria-label="Summary time" value={r.digestTime} disabled={!r.digest} onChange={(e) => e.target.value && save({ digestTime: e.target.value })} />
-        </div>
+      <div className="srow">
+        <label className="scheck">
+          <input type="checkbox" checked={r.atDueTime} onChange={(e) => save({ atDueTime: e.target.checked })} />
+          <span className="srow-text">
+            <span className="srow-title">Due time</span>
+            <span className="srow-sub">For tasks that have a time</span>
+          </span>
+        </label>
+        <select aria-label="When to remind" value={r.leadMin} disabled={!r.atDueTime} onChange={(e) => save({ leadMin: Number(e.target.value) })}>
+          {LEADS.map((m) => (
+            <option key={m} value={m}>{m ? `${m} min before` : 'At the due time'}</option>
+          ))}
+        </select>
       </div>
-      <p className="small muted" style={{ marginBottom: 0 }}>These settings apply to all your devices. Tasks without a time are only in the morning summary.</p>
+
+      <div className="srow">
+        <label className="scheck">
+          <input type="checkbox" checked={r.digest} onChange={(e) => save({ digest: e.target.checked })} />
+          <span className="srow-text">
+            <span className="srow-title">Morning summary</span>
+            <span className="srow-sub">What is due today and overdue</span>
+          </span>
+        </label>
+        <input type="time" aria-label="Summary time" value={r.digestTime} disabled={!r.digest} onChange={(e) => e.target.value && save({ digestTime: e.target.value })} />
+      </div>
+      <p className="srow-note">These settings apply to all your devices.</p>
     </div>
   );
 }
@@ -361,43 +458,46 @@ function WebPushNotifications() {
 
   useEffect(() => {
     if (support !== 'ok') return;
-    currentSubscription().then((s) => setEnabled(!!s && Notification.permission === 'granted'), () => setEnabled(false));
+    currentSubscription().then(
+      (s) => setEnabled(!!s && Notification.permission === 'granted'),
+      () => setEnabled(false),
+    );
   }, [support, status.state]);
 
   return (
     <>
-      <div className="setting-row">
-        <div>
-          <div>Notifications on this device</div>
-          <div className="small muted">
+      <div className="srow">
+        <div className="srow-text">
+          <div className="srow-title">Notifications on this device</div>
+          <div className="srow-sub">
             {support === 'needs_home_screen'
               ? 'On iPhone and iPad, add the app to the Home Screen first (Share, Add to Home Screen), then open it from there and turn this on.'
               : support === 'unsupported'
                 ? 'This browser cannot receive notifications from a web app.'
                 : enabled
-                  ? 'On. Reminders arrive even when the app is closed.'
+                  ? (tested ?? 'On. Reminders arrive even when the app is closed.')
                   : 'Off. Turn on to get reminders here.'}
           </div>
         </div>
         {support === 'ok' && (
-          <div className="actions" style={{ margin: 0 }}>
+          <div className="srow-actions">
             {enabled ? (
               <>
-                <button className="btn" disabled={busy} onClick={() => run(async () => setTested((await sync.api<{ sent: number }>('/push/test', { body: {} })).sent ? 'Sent. It should appear in a few seconds.' : 'No device is set up for notifications.'))}>
+                <button className="btn" disabled={busy} onClick={() => run(async () => setTested((await sync.api<{ sent: number }>('/push/test', { body: {} })).sent ? 'Test sent. It should appear in a few seconds.' : 'No device is set up for notifications.'))}>
                   Send a test
                 </button>
-                <button className="btn" disabled={busy} onClick={() => run(async () => (await disablePush(sync), setEnabled(false)))}>Turn off</button>
+                <button className="btn" disabled={busy} onClick={() => run(async () => (await disablePush(sync), setEnabled(false), setTested(null)))}>Turn off</button>
               </>
             ) : (
               <button className="btn primary" disabled={busy || enabled === null} onClick={() => run(async () => (await enablePush(sync), setEnabled(true)))}>
-                <Icon name="bell" size={16} /> Turn on
+                <Icon name="bell" size={15} /> Turn on
               </button>
             )}
           </div>
         )}
       </div>
-      {tested && <p className="small muted">{tested}</p>}
-      {error && <p className="form-error" role="alert">{error}</p>}
+
+      {error && <p className="form-error srow-msg" role="alert">{error}</p>}
     </>
   );
 }
