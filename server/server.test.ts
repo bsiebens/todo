@@ -115,6 +115,20 @@ describe('sign-in', () => {
   });
 });
 
+describe('desktop app access', () => {
+  it('answers preflight requests from the desktop app only', async () => {
+    const ok = await fetch(`${base}/api/sync/push`, { method: 'OPTIONS', headers: { origin: 'https://tauri.localhost', 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization, content-type' } });
+    expect(ok.status).toBe(204);
+    expect(ok.headers.get('access-control-allow-origin')).toBe('https://tauri.localhost');
+    expect(ok.headers.get('access-control-allow-headers')).toContain('authorization');
+    const other = await fetch(`${base}/api/auth/status`, { headers: { origin: 'https://evil.example' } });
+    expect(other.headers.get('access-control-allow-origin')).toBeNull();
+    const mac = await fetch(`${base}/api/auth/status`, { headers: { origin: 'tauri://localhost' } });
+    expect(mac.headers.get('access-control-allow-origin')).toBe('tauri://localhost');
+    expect(await mac.json()).toMatchObject({ setupDone: false });
+  });
+});
+
 describe('sync', () => {
   it('uploads data that existed before sign-in and copies it to a new device', async () => {
     const a = await device();

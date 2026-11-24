@@ -9,6 +9,6 @@ export interface SqlDriver {
   query(sql: string, params?: unknown[]): Promise<Row[]>;
   /** Runs all statements in one transaction. */
   batch(statements: Statement[]): Promise<void>;
-  /** Where data lives, for the settings screen ("OPFS", "memory"). */
+  /** Where data lives, for the settings screen ("OPFS", "file", "memory"). */
   readonly storage: string;
 }

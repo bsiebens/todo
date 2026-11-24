@@ -42,6 +42,7 @@ Data lives in `deploy/data/postgres`, backups in `deploy/backups`.
 | `PORT` | Port on the home server for the reverse proxy to forward to. Default 8080. |
 | `SETUP_CODE` | Optional. Your own code for setting up the first device. Otherwise one is generated and shown in the log. |
 | `OWNER_EMAIL`, `SMTP_URL`, `MAIL_FROM` | Optional. Turns on "Email me a code". Only `OWNER_EMAIL` can receive codes. `SMTP_URL` looks like `smtps://user:password@smtp.example.com:465`. |
+| `CORS_ORIGINS` | Optional, comma-separated. Other web origins allowed to call the API. The desktop app is always allowed and needs nothing here. |
 
 ## 2. Reverse proxy
 

@@ -13,6 +13,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["./**/*.ts", "../src/sync/protocol.ts", "../src/sync/hlc.ts", "../src/domain/dependencies.ts"],
+  "include": ["./**/*.ts", "../src/sync/protocol.ts", "../src/sync/hlc.ts", "../src/domain/dependencies.ts", "../src/domain/reminders.ts", "../src/domain/tz.ts"],
   "exclude": ["./**/*.test.ts", "./testing.ts", "./dev.ts"]
 }
