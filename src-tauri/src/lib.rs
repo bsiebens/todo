@@ -66,6 +66,22 @@ fn show_quick(app: &AppHandle) {
         let _ = app.emit_to(QUICK, "quick-open", ());
         return;
     }
+    // Only one first open at a time (a double press of the shortcut).
+    if QUICK_BUILDING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    // Windows: making a webview window from a menu, single-instance or command handler
+    // freezes WebView2 (a blank square that takes no input), so build it on its own thread.
+    let app = app.clone();
+    std::thread::spawn(move || {
+        build_quick(&app);
+        QUICK_BUILDING.store(false, Ordering::SeqCst);
+    });
+}
+
+static QUICK_BUILDING: AtomicBool = AtomicBool::new(false);
+
+fn build_quick(app: &AppHandle) {
     let builder = WebviewWindowBuilder::new(app, QUICK, WebviewUrl::App("index.html#quick".into()))
         .title("New task")
         .inner_size(QUICK_SIZE.0, QUICK_SIZE.1)
@@ -95,7 +111,7 @@ fn show_quick(app: &AppHandle) {
 /// The quick-entry window follows the app's light/dark choice, which can differ
 /// from the system's: the native backdrop and the window's appearance switch with it.
 #[tauri::command]
-fn quick_window_theme(app: AppHandle, dark: bool) {
+async fn quick_window_theme(app: AppHandle, dark: bool) {
     if let Some(w) = app.get_webview_window(QUICK) {
         let _ = w.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light }));
         #[cfg(target_os = "windows")]
@@ -114,7 +130,7 @@ fn show_window(app: AppHandle) {
 }
 
 #[tauri::command]
-fn show_quick_entry(app: AppHandle) {
+async fn show_quick_entry(app: AppHandle) {
     show_quick(&app);
 }
 
