@@ -1,8 +1,8 @@
 # ToDo
 
-A personal task manager for home and office. It runs as an installable web app (PWA) in any modern browser, including a locked-down office PC, iPhone and iPad. Everything is stored on the device and works offline; a small server on your home network keeps devices in sync and sends reminders.
+A personal task manager for home and office. It runs as an installable web app (PWA) in any modern browser, including a locked-down office PC, iPhone and iPad, and as a desktop app for Windows, macOS and Linux. Everything is stored on the device and works offline; a small server on your home network keeps devices in sync and sends reminders.
 
-Design: see the "ToDo App: Technical & UI Design" doc. This repository holds phases 2 and 3: the local app, plus sync between devices, sign-in and reminders.
+Design: see the "ToDo App: Technical & UI Design" doc. This repository holds phases 2 to 4: the local app; sync between devices, sign-in and reminders; and the desktop app.
 
 ## Features
 
@@ -21,6 +21,7 @@ Design: see the "ToDo App: Technical & UI Design" doc. This repository holds pha
 - Sync between devices through your own server: per-field merge, works offline, live updates while open
 - Sign-in with passkeys, a one-time code from another device, or a code by email; devices can be signed out remotely
 - Reminders by Web Push: at the due time (or before) and a morning summary
+- Desktop app: tray icon, global quick-add shortcut, native reminder notifications, start at login. See [docs/desktop.md](docs/desktop.md)
 
 ## Development
 
@@ -47,6 +48,8 @@ See [deploy/README.md](deploy/README.md): `docker compose` with the app server, 
 | `src/ui` | React screens and styles |
 | `server` | Sync server: sign-in, push/pull merge, reminders, serves the web app |
 | `deploy` | Docker Compose setup and deploy guide |
+| `src-tauri` | Desktop app shell (Rust): tray, window, shortcut and notification plugins, SQLite file |
+| `src/platform` | Desktop-only web code: detection, settings, reminders, database driver |
 
 Data lives in SQLite in the browser's Origin Private File System. Triggers record every changed field in a local outbox (`sync_outbox`), which the sync client pushes to the server.
 

@@ -55,7 +55,7 @@ export class SyncClient {
   private wsRetry = 1000;
   private stopped = true;
   private unsubStore: (() => void) | null = null;
-  private readonly base: string;
+  private base: string;
   private readonly f: typeof fetch;
 
   constructor(
@@ -71,6 +71,18 @@ export class SyncClient {
     c.token = await store.getSyncState('token');
     c.status = { ...c.status, state: c.token ? 'idle' : 'signed_out', lastSync: await store.getSyncState('last_sync'), pending: await store.pendingCount() };
     return c;
+  }
+
+  /** The sync server's address; '' = the origin the app was loaded from. */
+  get baseUrl() {
+    return this.base;
+  }
+
+  /** Points the client at another server (desktop app). Only while signed out. */
+  async setBaseUrl(url: string): Promise<void> {
+    if (this.token) throw new Error('Sign out before changing the server.');
+    this.base = url;
+    await this.store.setSyncState('server_url', url || null);
   }
 
   get signedIn() {

@@ -3,6 +3,8 @@ import type { Context } from '../domain/types';
 import { DEFAULT_WEIGHTS, PRESETS, type UrgencyWeights } from '../domain/urgency';
 import { isOpen } from '../domain/types';
 import { useActions } from './actions';
+import { isDesktop } from '../platform/desktop';
+import { DesktopSettings } from './DesktopSettings';
 import { SyncSettings } from './SyncSettings';
 import { ThemeSwitch } from './ThemeSwitch';
 import { byUrgency, computeDerived, currentContext, useNow, useSnapshot, useStore } from './state';
@@ -51,6 +53,13 @@ export function SettingsView({ initialCode }: { initialCode?: string | null }) {
       <div className="viewhead"><h1>Settings</h1></div>
 
       <SyncSettings initialCode={initialCode} />
+
+      {isDesktop && (
+        <>
+          <h2>Desktop app</h2>
+          <DesktopSettings />
+        </>
+      )}
 
       <h2>Appearance</h2>
       <div className="card">
@@ -129,7 +138,7 @@ export function SettingsView({ initialCode }: { initialCode?: string | null }) {
       <h2>Data</h2>
       <div className="card">
       <p className="small muted" style={{ marginTop: 0 }}>
-        Stored on this device ({store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}).
+        Stored on this device ({store.storage === 'file' ? 'a database file in the app data folder' : store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}).
       </p>
       <button className="btn" onClick={download}>Export everything as JSON</button>
       </div>

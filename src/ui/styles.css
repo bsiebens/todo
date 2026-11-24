@@ -582,3 +582,4 @@ textarea.desc { width: 100%; min-height: 96px; resize: vertical; line-height: 1.
 @media (prefers-reduced-motion: reduce) { .syncdot.s-syncing { animation: none; } }
 .banner.notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .fields .inline select { width: auto; flex: 0 1 auto; }
+.shortcut { width: 14em; cursor: pointer; text-align: center; caret-color: transparent; }

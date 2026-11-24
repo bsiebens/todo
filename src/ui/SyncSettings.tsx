@@ -3,6 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import type { SignInResult } from '../sync/client';
 import type { AuthStatus, DeviceInfo } from '../sync/protocol';
 import { currentSubscription, disablePush, enablePush, pushSupport } from '../sync/push';
+import { isDesktop } from '../platform/desktop';
+import { normalizeServerUrl } from '../platform/desktop-core';
+import { DesktopNotifications } from './DesktopSettings';
 import { Icon } from './Icon';
 import { useSnapshot, useStore, useSync, useSyncStatus } from './state';
 
@@ -10,6 +13,7 @@ export function defaultDeviceName(): string {
   const ua = navigator.userAgent;
   const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows PC' : /Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
   const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+  if (isDesktop) return `${os}, desktop app`;
   return browser ? `${os}, ${browser}` : os;
 }
 
@@ -69,25 +73,66 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
   const [sent, setSent] = useState(false);
   const { busy, error, run } = useBusy();
 
+  const [address, setAddress] = useState(sync.baseUrl);
+  const [lookup, setLookup] = useState(0);
+
   useEffect(() => {
+    // The desktop app has no server of its own origin: ask only once an address is set.
+    if (isDesktop && !sync.baseUrl) return setServer('unreachable');
+    setServer(null);
     sync.authStatus().then(setServer, () => setServer('unreachable'));
-  }, [sync]);
+  }, [sync, lookup]);
 
   const done = (r: SignInResult) => sync.signedInWith(r);
+
+  // Desktop app: the server's address comes first.
+  const serverForm = isDesktop && (
+    <form
+      className="inline-form"
+      onSubmit={(e) => (
+        e.preventDefault(),
+        run(async () => {
+          const url = normalizeServerUrl(address);
+          setAddress(url);
+          await sync.setBaseUrl(url);
+          setLookup((n) => n + 1);
+        })
+      )}
+    >
+      <input aria-label="Server address" placeholder="https://todo.your-domain" value={address} onChange={(e) => setAddress(e.target.value)} autoCapitalize="none" autoComplete="url" spellCheck={false} />
+      <button className="btn" disabled={busy || !address.trim()}>Connect</button>
+    </form>
+  );
 
   if (server === null) return <div className="card muted small">Looking for the sync server…</div>;
   if (server === 'unreachable') {
     return (
       <div className="card">
-        <p className="small muted" style={{ margin: 0 }}>
-          No sync server answers at this address. Sync works when the app is opened from your ToDo server (for example https://todo.your-domain). Your tasks are safe on this device either way.
-        </p>
+        {isDesktop ? (
+          <>
+            <p className="small muted" style={{ marginTop: 0 }}>
+              {sync.baseUrl ? `No ToDo server answers at ${sync.baseUrl}. Check the address and that this computer can reach it.` : 'Type the address of your ToDo server to sync this computer with your other devices.'} Your tasks are safe on this computer either way.
+            </p>
+            {serverForm}
+            {error && <p className="form-error" role="alert">{error}</p>}
+          </>
+        ) : (
+          <p className="small muted" style={{ margin: 0 }}>
+            No sync server answers at this address. Sync works when the app is opened from your ToDo server (for example https://todo.your-domain). Your tasks are safe on this device either way.
+          </p>
+        )}
       </div>
     );
   }
 
   return (
     <div className="card">
+      {isDesktop && (
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Server: {sync.baseUrl}{' '}
+          <button className="linkbtn" onClick={() => run(async () => (await sync.setBaseUrl(''), setAddress(''), setLookup((n) => n + 1)))}>Change</button>
+        </p>
+      )}
       {status.error && <p className="form-error" role="alert">{status.error}</p>}
       <p className="small muted" style={{ marginTop: 0 }}>
         Sign in to keep this device in step with your others. Tasks stay on this device too and keep working offline.
@@ -108,22 +153,24 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
         </>
       ) : (
         <>
-          <div className="actions" style={{ marginTop: 14 }}>
-            <button
-              className="btn primary"
-              disabled={busy}
-              onClick={() =>
-                run(async () => {
-                  const { flowId, options } = await sync.api<{ flowId: string; options: never }>('/auth/passkey/login/options', { body: {}, auth: false });
-                  const response = await startAuthentication({ optionsJSON: options });
-                  await done(await sync.api('/auth/passkey/login/verify', { body: { flowId, response, deviceName: name }, auth: false }));
-                })
-              }
-            >
-              <Icon name="key" size={16} /> Sign in with a passkey
-            </button>
-          </div>
-          <h3 className="subhead">Or use a one-time code</h3>
+          {!isDesktop && (
+            <div className="actions" style={{ marginTop: 14 }}>
+              <button
+                className="btn primary"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    const { flowId, options } = await sync.api<{ flowId: string; options: never }>('/auth/passkey/login/options', { body: {}, auth: false });
+                    const response = await startAuthentication({ optionsJSON: options });
+                    await done(await sync.api('/auth/passkey/login/verify', { body: { flowId, response, deviceName: name }, auth: false }));
+                  })
+                }
+              >
+                <Icon name="key" size={16} /> Sign in with a passkey
+              </button>
+            </div>
+          )}
+          <h3 className="subhead">{isDesktop ? 'Sign in with a one-time code' : 'Or use a one-time code'}</h3>
           <p className="small muted">Get one on a signed-in device under Settings, Sync, Add a device{server.emailEnabled ? ', or by email below' : ''}.</p>
           <form className="inline-form" onSubmit={(e) => (e.preventDefault(), run(async () => done(await sync.api('/auth/code/redeem', { body: { code, deviceName: name }, auth: false }))))}>
             <input aria-label="One-time code" placeholder="XXXX-XXXX" value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" autoComplete="one-time-code" />
@@ -213,26 +260,30 @@ function SignedIn() {
             </li>
           ))}
         </ul>
-      ) : (
+      ) : isDesktop ? null : (
         <p className="small muted">No passkeys yet. A passkey lets you sign in on new devices with Face ID, Touch ID or Windows Hello.</p>
       )}
-      <div className="actions">
-        <button
-          className="btn"
-          disabled={busy}
-          onClick={() =>
-            run(async () => {
-              const name = defaultDeviceName();
-              const { flowId, options } = await sync.api<{ flowId: string; options: never }>('/auth/passkey/register/options', { body: { name } });
-              const response = await startRegistration({ optionsJSON: options });
-              await sync.api('/auth/passkey/register/verify', { body: { flowId, response, name } });
-              load();
-            })
-          }
-        >
-          <Icon name="key" size={16} /> Add a passkey on this device
-        </button>
-      </div>
+      {isDesktop ? (
+        <p className="small muted">Passkeys are added in the browser or on your phone. The desktop app signs in with a one-time code.</p>
+      ) : (
+        <div className="actions">
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                const name = defaultDeviceName();
+                const { flowId, options } = await sync.api<{ flowId: string; options: never }>('/auth/passkey/register/options', { body: { name } });
+                const response = await startRegistration({ optionsJSON: options });
+                await sync.api('/auth/passkey/register/verify', { body: { flowId, response, name } });
+                load();
+              })
+            }
+          >
+            <Icon name="key" size={16} /> Add a passkey on this device
+          </button>
+        </div>
+      )}
 
       <h3 className="subhead">Signed-in devices</h3>
       <ul className="plainlist">
@@ -262,9 +313,47 @@ const LEADS = [0, 5, 10, 15, 30, 60];
 
 function Reminders() {
   const store = useStore();
-  const sync = useSync();
   const status = useSyncStatus();
   const r = useSnapshot().settings.reminders;
+
+  // The desktop app shows reminders itself; elsewhere the sync server sends them by Web Push.
+  if (status.state === 'signed_out' && !isDesktop) {
+    return <div className="card small muted">Reminders are sent by the sync server, so sign in first.</div>;
+  }
+  const save = (patch: Partial<typeof r>) => store.saveSettings({ reminders: { ...r, ...patch } });
+
+  return (
+    <div className="card">
+      {isDesktop ? <DesktopNotifications /> : <WebPushNotifications />}
+
+      <div className="fields" style={{ marginTop: 14 }}>
+        <label htmlFor="rem-due">Due time</label>
+        <div className="inline">
+          <label className="toggle">
+            <input id="rem-due" type="checkbox" checked={r.atDueTime} onChange={(e) => save({ atDueTime: e.target.checked })} /> Remind me
+          </label>
+          <select aria-label="When" value={r.leadMin} disabled={!r.atDueTime} onChange={(e) => save({ leadMin: Number(e.target.value) })}>
+            {LEADS.map((m) => (
+              <option key={m} value={m}>{m ? `${m} min before` : 'at the due time'}</option>
+            ))}
+          </select>
+        </div>
+        <label htmlFor="rem-digest">Morning</label>
+        <div className="inline">
+          <label className="toggle">
+            <input id="rem-digest" type="checkbox" checked={r.digest} onChange={(e) => save({ digest: e.target.checked })} /> Summary of today and overdue at
+          </label>
+          <input type="time" aria-label="Summary time" value={r.digestTime} disabled={!r.digest} onChange={(e) => e.target.value && save({ digestTime: e.target.value })} />
+        </div>
+      </div>
+      <p className="small muted" style={{ marginBottom: 0 }}>These settings apply to all your devices. Tasks without a time are only in the morning summary.</p>
+    </div>
+  );
+}
+
+function WebPushNotifications() {
+  const sync = useSync();
+  const status = useSyncStatus();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [tested, setTested] = useState<string | null>(null);
   const { busy, error, run } = useBusy();
@@ -275,13 +364,8 @@ function Reminders() {
     currentSubscription().then((s) => setEnabled(!!s && Notification.permission === 'granted'), () => setEnabled(false));
   }, [support, status.state]);
 
-  if (status.state === 'signed_out') {
-    return <div className="card small muted">Reminders are sent by the sync server, so sign in first.</div>;
-  }
-  const save = (patch: Partial<typeof r>) => store.saveSettings({ reminders: { ...r, ...patch } });
-
   return (
-    <div className="card">
+    <>
       <div className="setting-row">
         <div>
           <div>Notifications on this device</div>
@@ -314,28 +398,6 @@ function Reminders() {
       </div>
       {tested && <p className="small muted">{tested}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
-
-      <div className="fields" style={{ marginTop: 14 }}>
-        <label htmlFor="rem-due">Due time</label>
-        <div className="inline">
-          <label className="toggle">
-            <input id="rem-due" type="checkbox" checked={r.atDueTime} onChange={(e) => save({ atDueTime: e.target.checked })} /> Remind me
-          </label>
-          <select aria-label="When" value={r.leadMin} disabled={!r.atDueTime} onChange={(e) => save({ leadMin: Number(e.target.value) })}>
-            {LEADS.map((m) => (
-              <option key={m} value={m}>{m ? `${m} min before` : 'at the due time'}</option>
-            ))}
-          </select>
-        </div>
-        <label htmlFor="rem-digest">Morning</label>
-        <div className="inline">
-          <label className="toggle">
-            <input id="rem-digest" type="checkbox" checked={r.digest} onChange={(e) => save({ digest: e.target.checked })} /> Summary of today and overdue at
-          </label>
-          <input type="time" aria-label="Summary time" value={r.digestTime} disabled={!r.digest} onChange={(e) => e.target.value && save({ digestTime: e.target.value })} />
-        </div>
-      </div>
-      <p className="small muted" style={{ marginBottom: 0 }}>These settings apply to all your devices. Tasks without a time are only in the morning summary.</p>
-    </div>
+    </>
   );
 }

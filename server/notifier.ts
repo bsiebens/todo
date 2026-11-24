@@ -1,7 +1,8 @@
 import * as webpush from 'web-push';
 import { DEFAULT_REMINDERS, type ReminderSettings } from '../src/sync/protocol';
 import { getKv, setKv, type Db } from './db';
-import { addDays, localParts, zonedToUtc } from './tz';
+import { dueReminders, type DueTask } from '../src/domain/reminders';
+import { addDays, localParts } from './tz';
 
 export interface PushPayload {
   title: string;
@@ -40,15 +41,6 @@ export async function webPushSender(db: Db, subject: string): Promise<{ sender: 
   };
 }
 
-interface DueTask {
-  id: string;
-  title: string;
-  dueDate: string;
-  dueTime: string | null;
-}
-
-const MISSED_WINDOW_MS = 30 * 60_000;
-
 /**
  * Sends reminders by Web Push, once a minute: at a task's due time (minus the lead
  * time), and a morning summary of what is due today or overdue. Times without a zone
@@ -71,32 +63,8 @@ export class Notifier {
 
   private async forAccount(accountId: string, tz: string, now: Date): Promise<number> {
     const settings = await this.settings(accountId);
-    const local = localParts(now, tz);
-    const tasks = await this.dueTasks(accountId, addDays(local.date, 1));
-    const out: { key: string; payload: PushPayload }[] = [];
-
-    if (settings.atDueTime) {
-      for (const t of tasks) {
-        if (!t.dueTime) continue;
-        const at = zonedToUtc(t.dueDate, t.dueTime, tz).getTime() - settings.leadMin * 60_000;
-        if (at <= now.getTime() && at > now.getTime() - MISSED_WINDOW_MS) {
-          out.push({
-            key: `due:${t.id}:${t.dueDate}T${t.dueTime}:${settings.leadMin}`,
-            payload: { title: t.title, body: settings.leadMin ? `Due at ${t.dueTime}, in ${settings.leadMin} min` : `Due now (${t.dueTime})`, tag: t.id, url: `/#task=${t.id}` },
-          });
-        }
-      }
-    }
-
-    if (settings.digest && local.time >= settings.digestTime && local.time < addHours(settings.digestTime, 3)) {
-      const today = tasks.filter((t) => t.dueDate === local.date);
-      const overdue = tasks.filter((t) => t.dueDate < local.date);
-      if (today.length || overdue.length) {
-        const parts = [today.length && `${today.length} due today`, overdue.length && `${overdue.length} overdue`].filter(Boolean).join(', ');
-        const names = [...overdue, ...today].slice(0, 3).map((t) => t.title).join(' · ');
-        out.push({ key: `digest:${local.date}`, payload: { title: parts.charAt(0).toUpperCase() + parts.slice(1), body: names, tag: 'digest', url: '/' } });
-      }
-    }
+    const tasks = await this.dueTasks(accountId, addDays(localParts(now, tz).date, 1));
+    const out = dueReminders(tasks, settings, now, tz).map(({ key, ...payload }) => ({ key, payload }));
 
     let sent = 0;
     for (const { key, payload } of out) {
@@ -157,8 +125,3 @@ export class Notifier {
   }
 }
 
-function addHours(hm: string, h: number): string {
-  const [hh, mm] = hm.split(':').map(Number) as [number, number];
-  const total = Math.min(hh + h, 24);
-  return `${String(total).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-}
