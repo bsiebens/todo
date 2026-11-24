@@ -10,6 +10,8 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      # The app always listens on 8080 inside the container; PORT in .env is only the host side.
+      PORT: "8080"
       # Separate settings instead of a postgres:// URL, so any password works without encoding.
       PGHOST: db
       PGPORT: "5432"

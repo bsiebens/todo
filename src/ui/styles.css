@@ -172,11 +172,12 @@ kbd { font-family: inherit; font-size: 11px; color: var(--text-3); border: 1px s
 
 /* Sign-in screen: shown instead of the app until this device is signed in. */
 .gate { min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start; padding: max(10vh, env(safe-area-inset-top)) 16px 32px; }
-.gate-box { width: 100%; max-width: 640px; }
+.gate-box { width: 100%; max-width: 760px; }
 .gate-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
 .gate-brand img { border-radius: 9px; }
 .gate-brand h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
 .gate-lead { margin: 0 0 18px; color: var(--text-2); }
+.form-error.gate-warn { margin: 0 0 14px; }
 
 /* ==========================================================================
    Buttons and small controls
@@ -578,7 +579,7 @@ textarea.desc { width: 100%; min-height: 96px; resize: vertical; line-height: 1.
 .srow-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; min-width: 0; }
 .srow-title { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
 .srow-sub { font-size: 13px; color: var(--text-2); line-height: 1.45; }
-.srow-sub code { font-size: 12px; }
+.srow-sub code { font-size: 12px; white-space: nowrap; }
 .srow-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .srow-form { display: flex; gap: 8px; flex: 0 1 320px; }
 .srow-form input, .srow-input { flex: 1 1 auto; min-width: 0; width: 100%; max-width: 320px; }
