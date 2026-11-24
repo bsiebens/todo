@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatTimestamp, toDateStr } from '../domain/dates';
-import { describeRule, RECURRENCE_PRESETS } from '../domain/recurrence';
-import { isOpen, PRIORITY_LABELS, type Id, type Priority, type RecurrenceMode, type Task } from '../domain/types';
+import { isOpen, PRIORITY_LABELS, type Id, type Priority, type Task } from '../domain/types';
 import { STATUS_LABELS } from '../domain/status';
 import { StoreError } from '../db/store';
 import { useActions } from './actions';
 import { Icon } from './Icon';
 import { ProjectPicker } from './ProjectPicker';
+import { RepeatField } from './RepeatEditor';
 import { useDerived, useSnapshot, useStore } from './state';
 
 interface Props {
@@ -60,8 +60,6 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
       setDepError(e instanceof StoreError ? e.message : String(e));
     }
   };
-
-  const presetValue = series ? RECURRENCE_PRESETS.findIndex((p) => p.rule === series.rrule && p.mode === series.mode) : -1;
 
   return (
     <div>
@@ -152,26 +150,7 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
         />
 
         <label htmlFor="f-rep">Repeats</label>
-        <div>
-          <select
-            id="f-rep"
-            value={series ? (presetValue >= 0 ? String(presetValue) : 'custom') : 'none'}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === 'none') store.setRecurrence(task.id, null);
-              else if (v === 'custom') store.setRecurrence(task.id, { rule: series?.rrule ?? 'FREQ=WEEKLY', mode: series?.mode ?? 'schedule' });
-              else store.setRecurrence(task.id, RECURRENCE_PRESETS[Number(v)]!);
-            }}
-          >
-            <option value="none">Does not repeat</option>
-            {RECURRENCE_PRESETS.map((p, i) => (
-              <option key={i} value={i}>{p.label}</option>
-            ))}
-            <option value="custom">Custom rule…</option>
-          </select>
-          {series && presetValue < 0 && <CustomRule rule={series.rrule} mode={series.mode} onSave={(rule, mode) => store.setRecurrence(task.id, { rule, mode })} />}
-          {series && <div className="small muted" style={{ marginTop: 4 }}>{describeRule(series.rrule, series.mode)}</div>}
-        </div>
+        <RepeatField task={task} series={series} today={today} onError={(m) => notify(m)} />
 
         <label htmlFor="f-start">Start after</label>
         <input id="f-start" type="date" value={task.startAfter?.slice(0, 10) ?? ''} onChange={(e) => update({ startAfter: e.target.value ? `${e.target.value}T00:00:00` : null })} />
@@ -267,25 +246,6 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
         </div>
         <div className="small muted created">Created {formatTimestamp(task.createdAt)}{task.dueDate && task.dueDate < today && open ? ' · overdue' : ''}</div>
       </div>
-    </div>
-  );
-}
-
-function CustomRule({ rule, mode, onSave }: { rule: string; mode: RecurrenceMode; onSave: (rule: string, mode: RecurrenceMode) => void }) {
-  const [r, setR] = useState(rule);
-  const [m, setM] = useState(mode);
-  useEffect(() => {
-    setR(rule);
-    setM(mode);
-  }, [rule, mode]);
-  return (
-    <div className="inline" style={{ marginTop: 6 }}>
-      <input aria-label="iCalendar rule" value={r} onChange={(e) => setR(e.target.value.toUpperCase())} placeholder="FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2" style={{ flex: 1, minWidth: 180 }} />
-      <select aria-label="Count from" value={m} onChange={(e) => setM(e.target.value as RecurrenceMode)}>
-        <option value="schedule">on schedule</option>
-        <option value="after_completion">after completion</option>
-      </select>
-      <button className="btn" onClick={() => onSave(r, m)}>Save</button>
     </div>
   );
 }

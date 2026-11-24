@@ -109,6 +109,7 @@ export function parseQuickAdd(input: string, today: string): QuickAddResult {
       else if (next in UNITS) { rule = `FREQ=${FREQ[UNITS[next]!]}`; consumed = 2; }
       else if (/^\d+$/.test(next) && n2 && n2 in UNITS) { rule = `FREQ=${FREQ[UNITS[n2]!]};INTERVAL=${next}`; consumed = 3; }
       else if (next === 'last' && (n2 === 'workday' || n2 === 'weekday')) { rule = 'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1'; consumed = 3; }
+      else if (next === 'first' && (n2 === 'workday' || n2 === 'weekday')) { rule = 'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1'; consumed = 3; }
       else {
         const days = next.split(',').map((d) => WEEKDAYS[d]);
         if (days.length && days.every((d) => d !== undefined)) {
