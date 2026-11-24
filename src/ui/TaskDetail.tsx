@@ -6,6 +6,7 @@ import { STATUS_LABELS } from '../domain/status';
 import { StoreError } from '../db/store';
 import { useActions } from './actions';
 import { Icon } from './Icon';
+import { ProjectPicker } from './ProjectPicker';
 import { useDerived, useSnapshot, useStore } from './state';
 
 interface Props {
@@ -138,12 +139,7 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
         </div>
 
         <label htmlFor="f-proj">Project</label>
-        <select id="f-proj" value={task.projectId ?? ''} onChange={(e) => update({ projectId: e.target.value || null })}>
-          <option value="">Inbox</option>
-          {d.tree.flatten().map(({ project, depth }) => (
-            <option key={project.id} value={project.id}>{'  '.repeat(depth) + project.name}</option>
-          ))}
-        </select>
+        <ProjectPicker id="f-proj" value={task.projectId} onChange={(projectId) => update({ projectId })} />
 
         <label htmlFor="f-tags">Tags</label>
         <input
