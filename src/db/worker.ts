@@ -16,7 +16,7 @@ const ready = (async () => {
     db = new sqlite3.oo1.DB(':memory:', 'c');
     storage = 'memory';
   }
-  db.exec('PRAGMA foreign_keys = ON');
+  // Foreign keys stay off: synced records can arrive before the records they point to.
   return { db, storage };
 })();
 

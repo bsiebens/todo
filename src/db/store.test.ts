@@ -82,3 +82,41 @@ describe('Store', () => {
     expect(store.snapshot.projects.find((p) => p.id === sub)!.parentId).toBe(work);
   });
 });
+
+describe('sync outbox', () => {
+  it('queues data from before the sync upgrade so the first sign-in uploads it', async () => {
+    const { MIGRATIONS } = await import('./schema');
+    const db = await createMemoryDriver();
+    const first = (MIGRATIONS[0] as string).split(/;\s*$/m).map((s) => s.replace(/--.*$/gm, '').trim()).filter(Boolean);
+    await db.batch([...first.map((sql) => ({ sql })), { sql: 'PRAGMA user_version = 1' }]);
+    await db.batch([{ sql: "INSERT INTO task (id, title, created_at, updated_at) VALUES ('t1', 'Old task', 'x', 'x')" }]);
+    const s = await Store.open(db);
+    const ops = (await s.pendingOps()).map((p) => p.op);
+    expect(ops.find((o) => o.entity === 'task' && o.field === 'title')).toMatchObject({ id: 't1', value: '"Old task"' });
+    expect(ops.every((o) => o.hlc)).toBe(true);
+  });
+
+  it('records one change per field per write, with increasing clocks', async () => {
+    const id = await store.createTask({ title: 'A', tagNames: ['x'] });
+    await store.ackOps(Number.MAX_SAFE_INTEGER);
+    await store.setTags(id, ['x']); // removes and re-adds the same tag
+    await store.updateTask(id, { title: 'B' });
+    const ops = (await store.pendingOps()).map((p) => p.op);
+    const tagOps = ops.filter((o) => o.entity === 'task_tag');
+    expect(tagOps.map((o) => o.value)).toEqual(['true']);
+    const title = ops.find((o) => o.field === 'title')!;
+    expect(title.value).toBe('"B"');
+    expect(title.hlc > tagOps[0]!.hlc).toBe(true);
+  });
+
+  it('ignores remote changes older than local ones', async () => {
+    const id = await store.createTask({ title: 'Local' });
+    const applied = await store.applyRemote([{ entity: 'task', id, field: 'title', value: '"Old remote"', hlc: '000000000000001:0000:zzz' }]);
+    expect(applied).toBe(0);
+    expect(store.task(id).title).toBe('Local');
+    await store.applyRemote([{ entity: 'task', id, field: 'title', value: '"New remote"', hlc: '999999999999999:0000:zzz' }]);
+    expect(store.task(id).title).toBe('New remote');
+    // Applying remote changes does not queue them to be sent back.
+    expect((await store.pendingOps()).some((p) => p.op.value === '"New remote"')).toBe(false);
+  });
+});

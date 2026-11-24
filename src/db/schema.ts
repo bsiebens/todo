@@ -1,5 +1,10 @@
-/** Ordered migrations; PRAGMA user_version records how many have run. */
-export const MIGRATIONS: string[] = [
+import { syncMigration } from './sync-schema';
+
+/**
+ * Ordered migrations; PRAGMA user_version records how many have run.
+ * A string is split on semicolons at line ends; an array is a list of whole statements.
+ */
+export const MIGRATIONS: (string | string[])[] = [
   `
   CREATE TABLE project (
     id TEXT PRIMARY KEY,
@@ -87,4 +92,5 @@ export const MIGRATIONS: string[] = [
     at TEXT NOT NULL
   );
   `,
+  syncMigration(),
 ];

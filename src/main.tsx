@@ -4,7 +4,9 @@ import { createWorkerDriver } from './db/worker-driver';
 import { Store } from './db/store';
 import { ActionsProvider } from './ui/actions';
 import { App } from './ui/App';
-import { StoreContext } from './ui/state';
+import { StoreContext, SyncContext } from './ui/state';
+import { SyncClient } from './sync/client';
+import { refreshPush } from './sync/push';
 import './ui/styles.css';
 import { initTheme } from './ui/theme';
 
@@ -16,12 +18,20 @@ async function start() {
   try {
     const store = await Store.open(await createWorkerDriver());
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+    const sync = await SyncClient.create(store);
+    // Only one tab may own the database; a second tab (memory storage) does not sync.
+    if (store.storage === 'OPFS') {
+      sync.start();
+      refreshPush(sync);
+    }
     root.render(
       <StrictMode>
         <StoreContext.Provider value={store}>
-          <ActionsProvider>
-            <App />
-          </ActionsProvider>
+          <SyncContext.Provider value={sync}>
+            <ActionsProvider>
+              <App />
+            </ActionsProvider>
+          </SyncContext.Provider>
         </StoreContext.Provider>
       </StrictMode>,
     );

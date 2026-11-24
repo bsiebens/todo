@@ -9,7 +9,7 @@ import { QuickAdd } from './QuickAdd';
 import { Sidebar } from './Sidebar';
 import { TaskDetail } from './TaskDetail';
 import { TaskList } from './TaskList';
-import { useDerived, useSnapshot, useStore } from './state';
+import { useDerived, useSnapshot, useStore, useSync, useSyncStatus } from './state';
 import { selectView, type View } from './views';
 
 const isPhone = () => window.matchMedia('(max-width: 719px)').matches;
@@ -19,7 +19,15 @@ export function App() {
   const s = useSnapshot();
   const d = useDerived();
   const { changeStatus } = useActions();
-  const [view, setView] = useState<View>({ kind: 'focus' });
+  const sync = useSync();
+  const syncStatus = useSyncStatus();
+  // A sign-in link from the email (#signin=CODE) opens Settings with the code filled in.
+  const [linkCode] = useState(() => {
+    const m = /^#signin=([A-Za-z0-9-]+)$/.exec(location.hash);
+    if (m) history.replaceState(null, '', location.pathname + location.search);
+    return m?.[1] ?? null;
+  });
+  const [view, setView] = useState<View>(() => (linkCode ? { kind: 'settings' } : { kind: 'focus' }));
   const [selected, setSelected] = useState<Id | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [sheet, setSheet] = useState(false);
@@ -33,6 +41,28 @@ export function App() {
   const isList = !['projects', 'tags', 'settings', 'analytics'].includes(view.kind);
   const result = useMemo(() => (isList ? selectView(view, s, d, { showHidden, includeSub }) : null), [view, s, d, showHidden, includeSub, isList]);
   const flat = useMemo(() => result?.sections.flatMap((x) => x.tasks) ?? [], [result]);
+
+  // A reminder notification opens its task (#task=ID).
+  useEffect(() => {
+    const open = (hash: string) => {
+      const m = /^#task=([A-Za-z0-9-]+)$/.exec(hash);
+      if (!m) return;
+      setView({ kind: 'focus' });
+      setSelected(m[1]!);
+      history.replaceState(null, '', location.pathname + location.search);
+    };
+    open(location.hash);
+    const onHash = () => open(location.hash);
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'open' && typeof e.data.hash === 'string') open(e.data.hash);
+    };
+    window.addEventListener('hashchange', onHash);
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+      navigator.serviceWorker?.removeEventListener('message', onMessage);
+    };
+  }, []);
 
   // Drop the selection if the task disappears (deleted).
   useEffect(() => {
@@ -132,10 +162,16 @@ export function App() {
             Offline storage is not available here (is the app already open in another tab?). Changes in this window are not saved.
           </div>
         )}
+        {syncStatus.notices.length > 0 && (
+          <div role="alert" className="banner notice">
+            <span>{[...new Set(syncStatus.notices)].join(' ')}</span>
+            <button className="linkbtn" onClick={() => sync.dismissNotices()}>Dismiss</button>
+          </div>
+        )}
         <div className="main">
           <main className="list">
             <div className="list-inner">
-              {view.kind === 'settings' && <SettingsView />}
+              {view.kind === 'settings' && <SettingsView initialCode={linkCode} />}
               {view.kind === 'analytics' && <AnalyticsView onNavigate={navigate} />}
               {view.kind === 'projects' && <ProjectsView onOpen={(id) => navigate({ kind: 'project', id })} />}
               {view.kind === 'tags' && <TagsView onOpen={(id) => navigate({ kind: 'tag', id })} />}

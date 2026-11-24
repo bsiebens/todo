@@ -1,8 +1,8 @@
 # ToDo
 
-A personal task manager for home and office. It runs as an installable web app (PWA) in any modern browser, including a locked-down office PC, iPhone and iPad. Everything is stored on the device and works offline.
+A personal task manager for home and office. It runs as an installable web app (PWA) in any modern browser, including a locked-down office PC, iPhone and iPad. Everything is stored on the device and works offline; a small server on your home network keeps devices in sync and sends reminders.
 
-Design: see the "ToDo App: Technical & UI Design" doc. This repository currently holds **phase 2, the local MVP**: one device, no sync yet.
+Design: see the "ToDo App: Technical & UI Design" doc. This repository holds phases 2 and 3: the local app, plus sync between devices, sign-in and reminders.
 
 ## Features
 
@@ -18,24 +18,24 @@ Design: see the "ToDo App: Technical & UI Design" doc. This repository currently
 - Keyboard: `j`/`k` move, `x` done, `s` start/pause, `e` edit title, `n` note, `/` search, `Ctrl/Cmd+K` quick add, `Esc` close
 - Phone: tab bar, + button with quick-add sheet, swipe right for done, swipe left for start/pause
 - JSON export of everything
+- Sync between devices through your own server: per-field merge, works offline, live updates while open
+- Sign-in with passkeys, a one-time code from another device, or a code by email; devices can be signed out remotely
+- Reminders by Web Push: at the due time (or before) and a morning summary
 
 ## Development
 
 ```sh
 npm install
 npm run dev        # http://localhost:5173
-npm test           # unit tests (domain logic and storage)
-npm run build      # production build in dist/
+npm test           # unit and server tests (the server tests use an in-process Postgres)
+npm run build      # web app in dist/, server bundle in dist-server/
 ```
+
+To work on sync locally, run Postgres and then `DATABASE_URL=postgres://... npm run dev:server` next to `npm run dev`; Vite forwards `/api` to it.
 
 ## Running it on the home server
 
-```sh
-docker build -t todo .
-docker run -d --name todo -p 8080:80 --restart unless-stopped todo
-```
-
-Browsers only allow offline storage and installing the app over HTTPS (or on `localhost`), so put it behind your reverse proxy with a certificate.
+See [deploy/README.md](deploy/README.md): `docker compose` with the app server, Postgres and nightly backups, behind your reverse proxy with HTTPS.
 
 ## Layout
 
@@ -43,8 +43,11 @@ Browsers only allow offline storage and installing the app over HTTPS (or on `lo
 | --- | --- |
 | `src/domain` | Pure logic: types, urgency score, dependency graph, project tree, recurrence, quick-add parser, status rules |
 | `src/db` | SQLite schema and migrations, the `Store` (all reads and writes), browser worker (SQLite WASM on OPFS) and a Node driver for tests |
+| `src/sync` | Sync protocol shared with the server, hybrid logical clock, sync client, Web Push setup |
 | `src/ui` | React screens and styles |
+| `server` | Sync server: sign-in, push/pull merge, reminders, serves the web app |
+| `deploy` | Docker Compose setup and deploy guide |
 
-Data lives in SQLite in the browser's Origin Private File System. Every write is also recorded in a local `change_log` table, which the sync engine in phase 3 will push to the server.
+Data lives in SQLite in the browser's Origin Private File System. Triggers record every changed field in a local outbox (`sync_outbox`), which the sync client pushes to the server.
 
-Known limits of this phase: one device only; the app can be open in one tab at a time (a second tab shows a warning and does not save); reminders/notifications come with the server in phase 3.
+Known limits: the app can be open in one tab at a time (a second tab shows a warning and does not save or sync). If two offline devices both complete the same recurring task, each creates the next instance, so you may see two.

@@ -1,6 +1,7 @@
 import { isOpen } from '../domain/types';
 import { Icon, type IconName } from './Icon';
-import { useDerived, useSnapshot } from './state';
+import { useDerived, useSnapshot, useSyncStatus } from './state';
+import { ago } from './SyncSettings';
 import { ThemeSwitch } from './ThemeSwitch';
 import { viewKey, type View } from './views';
 
@@ -15,6 +16,7 @@ export function Sidebar({ view, onNavigate, open, onClose }: Props) {
   const s = useSnapshot();
   const d = useDerived();
   const active = viewKey(view);
+  const sync = useSyncStatus();
   const openTasks = s.tasks.filter(isOpen);
   const countByProject = new Map<string, number>();
   for (const t of openTasks) if (t.projectId) countByProject.set(t.projectId, (countByProject.get(t.projectId) ?? 0) + 1);
@@ -63,6 +65,20 @@ export function Sidebar({ view, onNavigate, open, onClose }: Props) {
       <div className="sidefoot">
         {item({ kind: 'search', q: '' }, 'Search', 'search')}
         {item({ kind: 'settings' }, 'Settings', 'settings')}
+        <button className="syncline nav" onClick={() => onNavigate({ kind: 'settings' })} title="Sync status">
+          <span className={`syncdot s-${sync.state}`} aria-hidden="true" />
+          <span className="small muted">
+            {sync.state === 'signed_out'
+              ? 'Not syncing'
+              : sync.state === 'syncing'
+                ? 'Syncing…'
+                : sync.state === 'offline'
+                  ? 'Offline'
+                  : sync.state === 'error'
+                    ? 'Sync problem'
+                    : `Synced ${ago(sync.lastSync)}`}
+          </span>
+        </button>
         <ThemeSwitch compact />
       </div>
     </nav>
