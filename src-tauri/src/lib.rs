@@ -118,6 +118,16 @@ fn show_quick_entry(app: AppHandle) {
     show_quick(&app);
 }
 
+/// Called by the quick-entry page once it has loaded and can talk to the app. Only
+/// the Windows smoke test in CI listens: with TODO_SMOKE_FILE set it notes the
+/// moment in that file, which proves the window didn't freeze on creation.
+#[tauri::command]
+fn quick_ready() {
+    if let Some(path) = std::env::var_os("TODO_SMOKE_FILE") {
+        let _ = std::fs::write(path, "quick-entry ready\n");
+    }
+}
+
 #[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
@@ -155,7 +165,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_notification::init())
         .manage(CloseToTray(AtomicBool::new(true)))
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, show_window, show_quick_entry, quick_window_theme, quit, db::db_query, db::db_batch])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, show_window, show_quick_entry, quick_window_theme, quick_ready, quit, db::db_query, db::db_batch])
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;

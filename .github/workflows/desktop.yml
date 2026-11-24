@@ -23,6 +23,53 @@ jobs:
       - run: cargo test
         working-directory: src-tauri
 
+  # Opens the quick-entry window in the real Windows app (WebView2) and checks that its page
+  # loads and answers, then saves a screenshot under the run's Artifacts. Catches the window
+  # freezing on creation, which only happens on Windows.
+  windows-smoke:
+    if: github.event_name != 'push'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npx tauri build --debug --no-bundle
+      - name: Open the quick-entry window
+        shell: pwsh
+        run: |
+          $ready = Join-Path $env:RUNNER_TEMP 'quick-ready.txt'
+          $env:TODO_SMOKE_FILE = $ready
+          $exe = 'src-tauri\target\debug\todo-desktop.exe'
+          $app = Start-Process $exe -PassThru
+          Start-Sleep -Seconds 15
+          # A second launch with --quick-add asks the running app for the quick-entry window,
+          # the same way the tray menu does.
+          Start-Process $exe -ArgumentList '--quick-add' | Out-Null
+          for ($i = 0; $i -lt 60 -and -not (Test-Path $ready); $i++) { Start-Sleep -Seconds 1 }
+          Start-Sleep -Seconds 2
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save((Join-Path $env:RUNNER_TEMP 'quick-entry.png'))
+          $ok = Test-Path $ready
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { throw 'The quick-entry window did not load within 60 seconds (frozen or blank).' }
+          Get-Content $ready
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-quick-entry-screenshot
+          path: ${{ runner.temp }}/quick-entry.png
+          if-no-files-found: ignore
+
   build:
     if: github.event_name != 'pull_request'
     strategy:
