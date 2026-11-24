@@ -6,6 +6,8 @@ import { nextDueDate } from '../domain/recurrence';
 import { checkTransition, STATUS_LABELS } from '../domain/status';
 import type { Context, Dependency, Id, Note, Priority, Project, RecurrenceMode, RecurrenceSeries, Status, Tag, Task } from '../domain/types';
 import { DEFAULT_WEIGHTS, type UrgencyWeights } from '../domain/urgency';
+import { parseSavedFilters, type SavedFilter } from '../domain/filters';
+import type { ImportItem } from '../domain/importers';
 import type { Row, SqlDriver, Statement } from './driver';
 import { migrate } from './migrate';
 import { Hlc } from '../sync/hlc';
@@ -19,6 +21,8 @@ export interface Settings {
   officeStart: string; // HH:MM
   officeEnd: string;
   reminders: ReminderSettings;
+  /** Named searches shown in the sidebar and command palette. */
+  savedFilters: SavedFilter[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   officeStart: '08:30',
   officeEnd: '17:30',
   reminders: DEFAULT_REMINDERS,
+  savedFilters: [],
 };
 
 export interface Snapshot {
@@ -118,6 +123,7 @@ export class Store {
         ...settingsObj,
         weights: { ...DEFAULT_WEIGHTS, ...(settingsObj.weights as object) },
         reminders: { ...DEFAULT_REMINDERS, ...(settingsObj.reminders as object) },
+        savedFilters: parseSavedFilters(settingsObj.savedFilters),
       } as Settings,
     };
     for (const fn of this.listeners) fn();
@@ -579,6 +585,77 @@ export class Store {
     await this.write(
       Object.entries(patch).map(([k, v]) => ({ sql: 'INSERT INTO setting (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', params: [k, JSON.stringify(v)] })),
     );
+  }
+
+  /**
+   * Adds tasks read from another app in one transaction. Missing projects (by path) and
+   * tags (by name) are created. Each task gets a system note saying where it came from.
+   */
+  async importTasks(items: ImportItem[], source: string): Promise<number> {
+    if (!items.length) return 0;
+    const st: Statement[] = [];
+    const now = nowIso();
+    const tree = this.tree();
+    // Existing projects by lower-case path; new ones are added as they are needed.
+    const byPath = new Map<string, Id>();
+    for (const { project } of tree.flatten()) byPath.set(tree.path(project.id, '/').toLowerCase(), project.id);
+    const siblingCount = new Map<Id | null, number>();
+    for (const p of this.snapshot.projects) siblingCount.set(p.parentId, (siblingCount.get(p.parentId) ?? 0) + 1);
+    const ensurePath = (path: string | null): Id | null => {
+      const parts = (path ?? '').split('/').map((x) => x.trim()).filter(Boolean);
+      let parent: Id | null = null;
+      for (let i = 0; i < parts.length; i++) {
+        const key = parts.slice(0, i + 1).join('/').toLowerCase();
+        let id = byPath.get(key);
+        if (!id) {
+          id = uuidv7();
+          const n = siblingCount.get(parent) ?? 0;
+          siblingCount.set(parent, n + 1);
+          st.push({ sql: 'INSERT INTO project (id, parent_id, name, sort_key, updated_at) VALUES (?,?,?,?,?)', params: [id, parent, parts[i]!, `a${String(n).padStart(4, '0')}`, now] });
+          byPath.set(key, id);
+        }
+        parent = id;
+      }
+      return parent;
+    };
+
+    // Small offsets keep the imported order when sorting by creation time.
+    const base = Date.now();
+    items.forEach((it, i) => {
+      const id = uuidv7(base + i);
+      const createdAt = it.createdAt ?? new Date(base + i).toISOString();
+      const open = it.status === 'todo' || it.status === 'in_progress';
+      let seriesId: Id | null = null;
+      if (it.recurrence && open) {
+        seriesId = uuidv7(base + i);
+        st.push({ sql: 'INSERT INTO recurrence_series (id, rrule, mode, updated_at) VALUES (?,?,?,?)', params: [seriesId, it.recurrence.rule, it.recurrence.mode, now] });
+      }
+      const row = {
+        id,
+        title: it.title.trim().slice(0, 500) || 'Untitled',
+        description: it.description,
+        status: it.status,
+        priority: it.priority,
+        due_date: it.dueDate ?? (seriesId ? now.slice(0, 10) : null),
+        due_time: it.dueTime,
+        project_id: ensurePath(it.projectPath),
+        estimate_min: it.estimateMin,
+        series_id: seriesId,
+        created_at: createdAt,
+        updated_at: now,
+        started_at: it.status === 'in_progress' ? now : null,
+        completed_at: open ? null : (it.completedAt ?? now),
+      };
+      const cols = Object.keys(row);
+      st.push({ sql: `INSERT INTO task (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, params: Object.values(row) });
+      st.push(this.systemNote(id, `Imported from ${source}`, now));
+      it.notes.forEach((body, k) => {
+        st.push({ sql: 'INSERT INTO note (id, task_id, body, kind, created_at) VALUES (?,?,?,?,?)', params: [uuidv7(base + i), id, body, 'user', new Date(base + k).toISOString()] });
+      });
+      st.push(...this.tagStatements(id, [...new Set(it.tags)]));
+    });
+    await this.write(st);
+    return items.length;
   }
 
   exportJson(): string {

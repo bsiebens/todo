@@ -33,6 +33,12 @@ const PATHS = {
   cloud: 'M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4.5 4.5 0 0 1-.5 9.5z',
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0',
   key: 'M7.5 12a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM10.7 13.3L20 4M16 8l3 3M18.5 5.5l2 2',
+  sliders: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4',
+  command: 'M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z',
+  filter: 'M4 5h16l-6 7.5V19l-4 2v-8.5z',
+  upload: 'M12 15V4M7 9l5-5 5 5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3',
+  arrowUp: 'M12 19V5M6 11l6-6 6 6',
+  arrowDown: 'M12 5v14M6 13l6 6 6-6',
 } as const;
 
 export type IconName = keyof typeof PATHS;

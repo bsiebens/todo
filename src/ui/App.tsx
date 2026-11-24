@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isOpen, type Id } from '../domain/types';
+import { addDays, toDateStr } from '../domain/dates';
+import { fuzzyFilter } from '../domain/fuzzy';
+import { isOpen, PRIORITY_LABELS, type Id, type Priority } from '../domain/types';
+import { CommandPalette, type Command } from './CommandPalette';
+import { FilterHeader, SaveFilter } from './FilterBar';
+import { ImportDialog } from './ImportDialog';
+import { THEME_PREFS, useTheme } from './theme';
+import { TuningView } from './Tuning';
 import { useActions } from './actions';
 import { AnalyticsView } from './Analytics';
 import { ContextSwitch } from './ContextSwitch';
 import { Icon } from './Icon';
-import { ProjectsView, SettingsView, TagsView } from './Manage';
-import { QuickAdd } from './QuickAdd';
+import { downloadExport, ProjectsView, SettingsView, TagsView } from './Manage';
+import { QuickAdd, SHORTCUT as QUICK_SHORTCUT } from './QuickAdd';
 import { Sidebar } from './Sidebar';
 import { TaskDetail } from './TaskDetail';
 import { TaskList } from './TaskList';
@@ -18,7 +25,8 @@ export function App() {
   const store = useStore();
   const s = useSnapshot();
   const d = useDerived();
-  const { changeStatus } = useActions();
+  const { changeStatus, quickAdd, notify } = useActions();
+  const { setPref } = useTheme();
   const sync = useSync();
   const syncStatus = useSyncStatus();
   // A sign-in link from the email (#signin=CODE) opens Settings with the code filled in.
@@ -33,12 +41,14 @@ export function App() {
   const [sheet, setSheet] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [includeSub, setIncludeSub] = useState(true);
+  const [palette, setPalette] = useState(false);
+  const [importing, setImporting] = useState(false);
   const quickRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  const isList = !['projects', 'tags', 'settings', 'analytics'].includes(view.kind);
+  const isList = !['projects', 'tags', 'settings', 'analytics', 'urgency'].includes(view.kind);
   const result = useMemo(() => (isList ? selectView(view, s, d, { showHidden, includeSub }) : null), [view, s, d, showHidden, includeSub, isList]);
   const flat = useMemo(() => result?.sections.flatMap((x) => x.tasks) ?? [], [result]);
 
@@ -81,14 +91,22 @@ export function App() {
     else quickRef.current?.focus();
   }, []);
 
-  // Keyboard shortcuts (desktop): j/k move, x done, s start/pause, e edit title, n note, / search, Ctrl/Cmd+K quick add.
+  // Keyboard shortcuts (desktop): j/k move, x done, s start/pause, e edit title, n note, / search,
+  // Ctrl/Cmd+K quick add, Ctrl/Cmd+P (or Ctrl/Cmd+Shift+P) command palette.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        setPalette(false);
         openQuickAdd();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setPalette((p) => !p);
+        return;
+      }
+      if (palette || importing) return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
       const idx = selected ? flat.findIndex((t) => t.id === selected) : -1;
@@ -128,11 +146,104 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [flat, selected, d.tasks, changeStatus, navigate, openQuickAdd, view]);
+  }, [flat, selected, d.tasks, changeStatus, navigate, openQuickAdd, view, palette, importing]);
 
   useEffect(() => {
     if (selected) document.querySelector(`[data-task="${selected}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [selected]);
+
+  const savedFilters = s.settings.savedFilters;
+  const commands = useMemo<Command[]>(() => {
+    const out: Command[] = [];
+    const go = (label: string, v: Parameters<typeof navigate>[0], icon: Command['icon'], keywords?: string): Command => ({
+      id: `go:${label}:${'id' in v ? v.id : v.kind}`,
+      group: 'Go to',
+      label,
+      icon,
+      keywords,
+      run: () => navigate(v),
+    });
+    out.push(
+      go('Focus', { kind: 'focus' }, 'focus', 'home next'),
+      go('Upcoming', { kind: 'upcoming' }, 'upcoming', 'calendar'),
+      go('Inbox', { kind: 'inbox' }, 'inbox'),
+      go('Logbook', { kind: 'logbook' }, 'logbook', 'done completed history'),
+      go('Analytics', { kind: 'analytics' }, 'chart', 'stats reports'),
+      go('Search', { kind: 'search', q: '' }, 'search', 'find'),
+      go('Urgency tuning', { kind: 'urgency' }, 'sliders', 'weights ranking presets score'),
+      go('Settings', { kind: 'settings' }, 'settings', 'preferences sync'),
+      go('Manage projects', { kind: 'projects' }, 'folder'),
+      go('Manage tags', { kind: 'tags' }, 'tag'),
+    );
+    for (const f of savedFilters) out.push(go(f.name, { kind: 'filter', id: f.id }, 'filter', `filter ${f.query}`));
+    for (const { project } of d.tree.flatten()) if (!project.archivedAt) out.push(go(d.tree.path(project.id), { kind: 'project', id: project.id }, 'folder', 'project'));
+    for (const t of s.tags) out.push(go(`#${t.name}`, { kind: 'tag', id: t.id }, 'tag', 'tag'));
+
+    out.push({ id: 'new', group: 'Task', label: 'New task', icon: 'plus', hint: QUICK_SHORTCUT, keywords: 'add create quick', run: () => setTimeout(openQuickAdd, 0) });
+    const cur = selected ? d.tasks.get(selected) : undefined;
+    if (cur && isList) {
+      const T = `“${cur.title.length > 40 ? `${cur.title.slice(0, 40)}…` : cur.title}”`;
+      const task = (id: string, label: string, icon: Command['icon'], run: () => unknown, hint?: string, keywords?: string): Command => ({ id: `task:${id}`, group: 'Task', label: `${label} ${T}`, icon, hint, keywords, run: () => void run() });
+      if (isOpen(cur)) {
+        out.push(task('done', 'Complete', 'check', () => changeStatus(cur.id, 'done'), 'X', 'done finish'));
+        out.push(cur.status === 'in_progress' ? task('pause', 'Pause', 'pause', () => changeStatus(cur.id, 'todo'), 'S') : task('start', 'Start', 'play', () => changeStatus(cur.id, 'in_progress'), 'S', 'begin'));
+        out.push(task('cancel', 'Cancel', 'close', () => changeStatus(cur.id, 'cancelled'), undefined, "won't do skip"));
+      } else out.push(task('reopen', 'Reopen', 'repeat', () => changeStatus(cur.id, 'todo'), 'X'));
+      out.push(task('focus', cur.focus ? 'Remove focus flag from' : 'Flag for today', 'star', () => store.updateTask(cur.id, { focus: !cur.focus }), undefined, 'focus star'));
+      for (const p of [4, 3, 2, 1, 0] as Priority[]) if (p !== cur.priority) out.push(task(`p${p}`, `Priority ${PRIORITY_LABELS[p]}:`, 'flag', () => store.updateTask(cur.id, { priority: p }), undefined, 'priority'));
+      const today = toDateStr(new Date());
+      out.push(task('due0', 'Due today:', 'upcoming', () => store.updateTask(cur.id, { dueDate: today }), undefined, 'date schedule'));
+      out.push(task('due1', 'Due tomorrow:', 'upcoming', () => store.updateTask(cur.id, { dueDate: addDays(today, 1) }), undefined, 'date schedule'));
+      if (cur.dueDate) out.push(task('due-', 'Clear due date of', 'upcoming', () => store.updateTask(cur.id, { dueDate: null, dueTime: null }), undefined, 'date remove'));
+      out.push(task('note', 'Add a note to', 'logbook', () => setTimeout(() => noteRef.current?.focus(), 0), 'N', 'comment'));
+      out.push(
+        task('delete', 'Delete', 'trash', async () => {
+          if (confirm(`Delete "${cur.title}"?`)) await store.deleteTask(cur.id);
+        }),
+      );
+    }
+
+    if (view.kind === 'focus') out.push({ id: 'hidden', group: 'View', label: showHidden ? 'Hide blocked and later tasks' : 'Show blocked and later tasks', icon: 'lock', run: () => setShowHidden(!showHidden) });
+    if (view.kind === 'search' && view.q.trim()) out.push({ id: 'savefilter', group: 'View', label: `Save “${view.q.trim()}” as a filter`, icon: 'filter', run: () => document.querySelector<HTMLButtonElement>('.filterbar .btn')?.click() });
+    for (const [m, label] of [['auto', 'Automatic'], ['home', 'Home'], ['office', 'Office']] as const) {
+      out.push({ id: `ctx:${m}`, group: 'Context', label: `Switch to ${label}`, icon: m === 'auto' ? 'clock' : m, keywords: 'where location', run: () => store.saveSettings({ contextMode: m }) });
+    }
+    for (const t of THEME_PREFS) out.push({ id: `theme:${t.value}`, group: 'Theme', label: `${t.label} theme`, icon: t.value === 'light' ? 'sun' : t.value === 'dark' ? 'moon' : 'system', keywords: 'appearance dark mode', run: () => setPref(t.value) });
+    out.push({ id: 'import', group: 'Data', label: 'Import tasks from another app', icon: 'upload', keywords: 'todoist ticktick csv outlook', run: () => setImporting(true) });
+    out.push({ id: 'export', group: 'Data', label: 'Export everything as JSON', icon: 'logbook', keywords: 'backup download', run: () => downloadExport(store) });
+    return out;
+  }, [navigate, savedFilters, d.tree, d.tasks, s.tags, selected, isList, view, showHidden, changeStatus, store, openQuickAdd, setPref]);
+
+  const dynamicCommands = useCallback(
+    (q: string): Command[] => {
+      const open = fuzzyFilter(q, s.tasks.filter(isOpen), (t) => t.title, 8);
+      return [
+        ...open.map<Command>((t) => ({
+          id: `open:${t.id}`,
+          group: 'Open',
+          label: t.title,
+          icon: 'check',
+          run: () => {
+            if (!isList || view.kind === 'urgency') setView({ kind: 'focus' });
+            setSelected(t.id);
+          },
+        })),
+        {
+          id: 'add',
+          group: 'Add',
+          label: q.trim(),
+          icon: 'plus',
+          keywords: q,
+          run: async () => {
+            const id = await quickAdd(q, { projectId: view.kind === 'project' ? view.id : null });
+            if (id) notify('Task added');
+          },
+        },
+        { id: 'search', group: 'Search', label: q.trim(), icon: 'search', keywords: q, run: () => navigate({ kind: 'search', q: q.trim() }) },
+      ];
+    },
+    [s.tasks, isList, view, quickAdd, notify, navigate],
+  );
 
   const defaultProject = view.kind === 'project' ? view.id : null;
   const showDetail = isList && !!selected;
@@ -142,7 +253,7 @@ export function App() {
 
   return (
     <div className={`app ${showDetail ? 'hasdetail' : 'nodetail'}`}>
-      <Sidebar view={view} onNavigate={navigate} open={drawer} onClose={() => setDrawer(false)} />
+      <Sidebar view={view} onNavigate={navigate} open={drawer} onClose={() => setDrawer(false)} onPalette={() => { setDrawer(false); setPalette(true); }} />
       {drawer && <div className="drawer-bg" onClick={() => setDrawer(false)} />}
 
       <div className="workspace">
@@ -171,7 +282,8 @@ export function App() {
         <div className="main">
           <main className="list">
             <div className="list-inner">
-              {view.kind === 'settings' && <SettingsView initialCode={linkCode} />}
+              {view.kind === 'settings' && <SettingsView initialCode={linkCode} onNavigate={navigate} onImport={() => setImporting(true)} />}
+              {view.kind === 'urgency' && <TuningView />}
               {view.kind === 'analytics' && <AnalyticsView onNavigate={navigate} />}
               {view.kind === 'projects' && <ProjectsView onOpen={(id) => navigate({ kind: 'project', id })} />}
               {view.kind === 'tags' && <TagsView onOpen={(id) => navigate({ kind: 'tag', id })} />}
@@ -187,6 +299,7 @@ export function App() {
                     )}
                     {ctxButton('phone-only')}
                   </div>
+                  {view.kind === 'filter' && <FilterHeader id={view.id} onNavigate={navigate} />}
                   {view.kind === 'search' && (
                     <>
                       <div className="searchbox">
@@ -201,6 +314,7 @@ export function App() {
                         />
                       </div>
                       {!view.q && <p className="small muted hint">Filters: #tag · project:Work/Clients · due&lt;7d · due:today · due:overdue · !high · status:done or status:all</p>}
+                      <SaveFilter query={view.q} onSaved={(id) => navigate({ kind: 'filter', id })} />
                     </>
                   )}
                   {(view.kind !== 'search' || view.q) && (
@@ -241,7 +355,7 @@ export function App() {
         {([
           ['Focus', 'focus', view.kind === 'focus', () => navigate({ kind: 'focus' })],
           ['Upcoming', 'upcoming', view.kind === 'upcoming', () => navigate({ kind: 'upcoming' })],
-          ['Browse', 'grid', ['project', 'inbox', 'tag', 'projects', 'tags', 'logbook', 'analytics', 'settings'].includes(view.kind), () => setDrawer(true)],
+          ['Browse', 'grid', ['project', 'inbox', 'tag', 'filter', 'projects', 'tags', 'logbook', 'analytics', 'urgency', 'settings'].includes(view.kind), () => setDrawer(true)],
           ['Search', 'search', view.kind === 'search', () => navigate({ kind: 'search', q: '' })],
         ] as const).map(([label, icon, on, go]) => (
           <button key={label} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined} onClick={go}>
@@ -250,6 +364,9 @@ export function App() {
           </button>
         ))}
       </nav>
+
+      {palette && <CommandPalette commands={commands} dynamic={dynamicCommands} onClose={() => setPalette(false)} />}
+      {importing && <ImportDialog onClose={() => setImporting(false)} onDone={() => { setImporting(false); navigate({ kind: 'focus' }); }} />}
 
       {sheet && (
         <div className="sheet-bg" onClick={() => setSheet(false)}>
