@@ -66,6 +66,22 @@ fn show_quick(app: &AppHandle) {
         let _ = app.emit_to(QUICK, "quick-open", ());
         return;
     }
+    // Only one first open at a time (a double press of the shortcut).
+    if QUICK_BUILDING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    // Windows: making a webview window from a menu, single-instance or command handler
+    // freezes WebView2 (a blank square that takes no input), so build it on its own thread.
+    let app = app.clone();
+    std::thread::spawn(move || {
+        build_quick(&app);
+        QUICK_BUILDING.store(false, Ordering::SeqCst);
+    });
+}
+
+static QUICK_BUILDING: AtomicBool = AtomicBool::new(false);
+
+fn build_quick(app: &AppHandle) {
     let builder = WebviewWindowBuilder::new(app, QUICK, WebviewUrl::App("index.html#quick".into()))
         .title("New task")
         .inner_size(QUICK_SIZE.0, QUICK_SIZE.1)
@@ -95,7 +111,7 @@ fn show_quick(app: &AppHandle) {
 /// The quick-entry window follows the app's light/dark choice, which can differ
 /// from the system's: the native backdrop and the window's appearance switch with it.
 #[tauri::command]
-fn quick_window_theme(app: AppHandle, dark: bool) {
+async fn quick_window_theme(app: AppHandle, dark: bool) {
     if let Some(w) = app.get_webview_window(QUICK) {
         let _ = w.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light }));
         #[cfg(target_os = "windows")]
@@ -114,8 +130,18 @@ fn show_window(app: AppHandle) {
 }
 
 #[tauri::command]
-fn show_quick_entry(app: AppHandle) {
+async fn show_quick_entry(app: AppHandle) {
     show_quick(&app);
+}
+
+/// Called by the quick-entry page once it has loaded and can talk to the app. Only
+/// the Windows smoke test in CI listens: with TODO_SMOKE_FILE set it notes the
+/// moment in that file, which proves the window didn't freeze on creation.
+#[tauri::command]
+fn quick_ready() {
+    if let Some(path) = std::env::var_os("TODO_SMOKE_FILE") {
+        let _ = std::fs::write(path, "quick-entry ready\n");
+    }
 }
 
 #[tauri::command]
@@ -155,7 +181,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_notification::init())
         .manage(CloseToTray(AtomicBool::new(true)))
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, show_window, show_quick_entry, quick_window_theme, quit, db::db_query, db::db_batch])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, show_window, show_quick_entry, quick_window_theme, quick_ready, quit, db::db_query, db::db_batch])
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
