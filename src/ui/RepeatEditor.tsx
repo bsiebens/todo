@@ -4,6 +4,8 @@ import {
   DAY_NAMES,
   defaultPart,
   describeRule,
+  firstDueOnOrAfter,
+  resolvePart,
   MONTH_NAMES,
   parseRuleSet,
   RECURRENCE_PRESETS,
@@ -99,31 +101,34 @@ export function RepeatField({ task, series, today, onError }: { task: Task; seri
           rule={series?.rrule ?? null}
           mode={series?.mode ?? 'schedule'}
           anchor={task.dueDate ?? today}
+          due={task.dueDate}
           today={today}
           onSave={(rule, mode) => void save(rule, mode)}
           onCancel={series ? undefined : () => setEditing(false)}
         />
       ) : (
-        series && <RuleSummary rule={series.rrule} mode={series.mode} anchor={task.dueDate ?? today} today={today} />
+        series && <RuleSummary rule={series.rrule} mode={series.mode} due={task.dueDate} today={today} />
       )}
     </div>
   );
 }
 
-function RuleSummary({ rule, mode, anchor, today }: { rule: string; mode: RecurrenceMode; anchor: string; today: string }) {
-  const next = useMemo(() => {
+function RuleSummary({ rule, mode, due, today }: { rule: string; mode: RecurrenceMode; due: string | null; today: string }) {
+  const { text, next } = useMemo(() => {
     try {
-      return upcomingDates(rule, mode, anchor, today, 4);
+      // A task without a due date gets the rule's first date when the repeat is set.
+      const d = due ?? firstDueOnOrAfter(rule, today);
+      return { text: describeRule(rule, mode, d), next: upcomingDates(rule, mode, d, today, 4) };
     } catch {
-      return [];
+      return { text: describeRule(rule, mode), next: [] as string[] };
     }
-  }, [rule, mode, anchor, today]);
+  }, [rule, mode, due, today]);
   return (
     <div className="rep-summary">
-      <div className="small">{describeRule(rule, mode)}</div>
+      <div className="small">{text}</div>
       {next.length > 0 && (
         <div className="small muted">
-          {mode === 'after_completion' ? 'If done on time: ' : 'Next: '}
+          {mode === 'after_completion' ? 'If done on the due date: ' : 'Next: '}
           {next.map((d) => prettyDate(d, today)).join(' · ')}
         </div>
       )}
@@ -131,10 +136,11 @@ function RuleSummary({ rule, mode, anchor, today }: { rule: string; mode: Recurr
   );
 }
 
-function initialParts(rule: string | null, anchor: string): RulePart[] {
+function initialParts(rule: string | null, anchor: string, mode: RecurrenceMode): RulePart[] {
   if (!rule) return [defaultPart('weekly', anchor)];
   try {
-    return parseRuleSet(rule);
+    // Show "every week" as the weekday it actually uses, so what you see is what repeats.
+    return parseRuleSet(rule).map((p) => (mode === 'schedule' ? resolvePart(p, anchor) : p));
   } catch {
     return [{ kind: 'raw', rule }];
   }
@@ -144,6 +150,7 @@ function RuleBuilder({
   rule,
   mode,
   anchor,
+  due,
   today,
   onSave,
   onCancel,
@@ -151,14 +158,15 @@ function RuleBuilder({
   rule: string | null;
   mode: RecurrenceMode;
   anchor: string;
+  due: string | null;
   today: string;
   onSave: (rule: string, mode: RecurrenceMode) => void;
   onCancel?: () => void;
 }) {
-  const [parts, setParts] = useState<RulePart[]>(() => initialParts(rule, anchor));
+  const [parts, setParts] = useState<RulePart[]>(() => initialParts(rule, anchor, mode));
   const [m, setM] = useState<RecurrenceMode>(mode);
   useEffect(() => {
-    setParts(initialParts(rule, anchor));
+    setParts(initialParts(rule, anchor, mode));
     setM(mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rule, mode]);
@@ -198,7 +206,7 @@ function RuleBuilder({
           <option value="after_completion">after completion</option>
         </select>
       </div>
-      {error ? <div className="error">{error}</div> : <RuleSummary rule={draft} mode={m} anchor={anchor} today={today} />}
+      {error ? <div className="error">{error}</div> : <RuleSummary rule={draft} mode={m} due={due} today={today} />}
       <div className="rep-row">
         <button className="btn primary small" disabled={!!error || !dirty} onClick={() => onSave(draft, m)}>
           {rule ? 'Save repeat' : 'Set repeat'}
