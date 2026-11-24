@@ -86,6 +86,10 @@ const subscribe = (fn: () => void) => {
   return () => listeners.delete(fn);
 };
 
+/** The current choice, and a way to hear when it (or the OS setting) changes. */
+export const themePref = (): ThemePref => current;
+export const subscribeTheme = subscribe;
+
 export function useTheme(): { pref: ThemePref; theme: Theme; setPref: (p: ThemePref) => void } {
   const pref = useSyncExternalStore(subscribe, () => current);
   const systemDark = useSyncExternalStore(subscribe, () => !!darkQuery()?.matches);

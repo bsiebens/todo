@@ -30,6 +30,8 @@ export function parsePrefs(raw: string | null): DesktopPrefs {
 export const QUICK_ENTRY_SAVE = 'quick-entry-save';
 /** Main window to quick-entry window: how the save went. */
 export const QUICK_ENTRY_DONE = 'quick-entry-done';
+/** Main window to quick-entry window: the light/dark choice changed (payload: the ThemePref). */
+export const QUICK_THEME = 'quick-theme';
 
 export interface QuickEntrySave {
   id: string;

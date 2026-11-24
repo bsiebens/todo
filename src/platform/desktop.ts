@@ -1,7 +1,8 @@
 import { dueReminders } from '../domain/reminders';
 import type { Store } from '../db/store';
 import { quickAddTask } from '../db/quick-add';
-import { answerQuickEntry, DEFAULT_PREFS, parsePrefs, pruneFired, QUICK_ENTRY_DONE, QUICK_ENTRY_SAVE, reminderTasks, type DesktopPrefs, type QuickEntrySave } from './desktop-core';
+import { subscribeTheme, themePref } from '../ui/theme';
+import { answerQuickEntry, DEFAULT_PREFS, parsePrefs, pruneFired, QUICK_ENTRY_DONE, QUICK_ENTRY_SAVE, QUICK_THEME, reminderTasks, type DesktopPrefs, type QuickEntrySave } from './desktop-core';
 
 /** True inside the Tauri desktop app (Windows, macOS, Linux); false in a browser or the installed PWA. */
 export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -143,6 +144,8 @@ export async function startDesktop(store: Store, signedIn: () => boolean): Promi
     const done = await answerQuickEntry(e.payload, signedIn(), (text) => quickAddTask(store, text));
     await emitTo('quick', QUICK_ENTRY_DONE, done);
   });
+  // The quick-entry window is a separate page; tell it when the theme changes here.
+  subscribeTheme(() => void emitTo('quick', QUICK_THEME, themePref()).catch(() => {}));
   await invoke('set_close_to_tray', { enabled: prefs.closeToTray }).catch(() => {});
   await registerHotkey(prefs.hotkey).catch((e) => console.warn('global shortcut not registered', e));
   // Ctrl+Q / Cmd+Q quits for real (the close button only hides to the tray).
