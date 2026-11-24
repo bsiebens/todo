@@ -563,16 +563,31 @@ textarea.desc { width: 100%; min-height: 96px; resize: vertical; line-height: 1.
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-/* Sync and reminders */
-.settings .subhead { font-size: 14px; font-weight: 600; margin: 18px 0 6px; }
-.inline-form { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
-.inline-form input { flex: 1 1 180px; min-width: 0; }
+/* Sync and reminders: settings rows with the text on the left and the control on the right */
+.scard { padding: 0 16px; }
+.srow { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding: 14px 0; }
+.srow + .srow { border-top: 1px solid var(--border); }
+.srow-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; min-width: 0; }
+.srow-title { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.srow-sub { font-size: 13px; color: var(--text-2); line-height: 1.45; }
+.srow-sub code { font-size: 12px; }
+.srow-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.srow-form { display: flex; gap: 8px; flex: 0 1 320px; }
+.srow-form input, .srow-input { flex: 1 1 auto; min-width: 0; width: 100%; max-width: 320px; }
+.srow > select, .srow > input[type='time'] { width: auto; min-width: 170px; }
+.srow-note { font-size: 13px; color: var(--text-2); margin: 0; padding: 0 0 14px; }
+.srow-msg { margin: 0; padding: 0 0 14px; }
+.scheck { display: flex; align-items: center; gap: 12px; flex: 1 1 260px; min-width: 0; cursor: pointer; }
+.scheck input[type='checkbox'] { width: 18px; height: 18px; vertical-align: middle; flex: none; }
+.slist { list-style: none; margin: 2px 0 0; padding: 0; flex: 1 0 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.slist li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 6px 4px 12px; }
+.slist li + li { border-top: 1px solid var(--border); }
+.slist li > .icon { color: var(--text-3); flex: none; }
+.slist-name { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.slist-meta { font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.btn.small { height: 30px; padding: 0 10px; font-size: 13px; box-shadow: none; }
 .form-error { color: var(--danger); font-size: 13px; margin: 8px 0 0; }
-.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; font-size: 15px; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-text); }
-.plainlist { list-style: none; margin: 0; padding: 0; }
-.plainlist li { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.plainlist li:last-child { border-bottom: none; }
-.plainlist li > span:first-child { flex: 1 1 auto; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; font-size: 17px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); }
 .syncline { display: inline-flex; align-items: center; gap: 8px; }
 .sidefoot .syncline { margin-top: 2px; }
 .syncdot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-2); flex: none; opacity: .6; }
@@ -583,7 +598,11 @@ textarea.desc { width: 100%; min-height: 96px; resize: vertical; line-height: 1.
 @keyframes syncpulse { from { opacity: .35; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .syncdot.s-syncing { animation: none; } }
 .banner.notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.fields .inline select { width: auto; flex: 0 1 auto; }
+@media (max-width: 719px) {
+  .srow > .btn, .srow-actions, .srow-form, .srow-input, .srow > select, .srow > input[type='time'] { flex: 1 1 100%; max-width: none; }
+  .srow-actions .btn { flex: 1; }
+  .scheck + select, .scheck + input[type='time'] { margin-left: 30px; flex-basis: calc(100% - 30px); }
+}
 
 /* ==========================================================================
    Project picker (task detail)
