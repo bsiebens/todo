@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMemoryDriver } from './node-driver';
 import { Store, StoreError } from './store';
+import { addDays } from '../domain/dates';
 
 let store: Store;
 beforeEach(async () => {
@@ -64,6 +65,16 @@ describe('Store', () => {
     expect(next > due).toBe(true);
     expect([1, 2, 3, 4, 5]).toContain(new Date(`${next}T12:00:00`).getDay());
     await expect(store.setRecurrence(id, { rule: 'NONSENSE', mode: 'schedule' })).rejects.toMatchObject({ code: 'invalid' });
+  });
+
+  it('the next weekly task lands on the same weekday and keeps the start-after gap', async () => {
+    const id = await store.createTask({ title: 'Timesheets', dueDate: '2026-11-27', recurrence: { rule: 'FREQ=WEEKLY', mode: 'schedule' } });
+    await store.updateTask(id, { startAfter: '2026-11-24T00:00:00' });
+    const { nextId } = await store.setStatus(id, 'done');
+    const next = store.task(nextId!);
+    expect(new Date(`${next.dueDate}T12:00:00`).getDay()).toBe(5);
+    expect(next.dueDate! > '2026-11-27').toBe(true);
+    expect(next.startAfter).toBe(`${addDays(next.dueDate!, -3)}T00:00:00`);
   });
 
   it('builds nested projects from a path and refuses moving into a descendant', async () => {

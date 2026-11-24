@@ -1,5 +1,5 @@
 import { DependencyGraph } from '../domain/dependencies';
-import { toDateStr } from '../domain/dates';
+import { addDays, diffDays, toDateStr } from '../domain/dates';
 import { uuidv7 } from '../domain/ids';
 import { ProjectTree } from '../domain/projects';
 import { firstDueOnOrAfter, nextDueDate, ruleError } from '../domain/recurrence';
@@ -452,6 +452,8 @@ export class Store {
           priority: t.priority,
           due_date: due,
           due_time: t.dueTime,
+          // Keep "start after" the same number of days before the due date.
+          start_after: t.startAfter && t.dueDate ? `${addDays(due, diffDays(t.startAfter.slice(0, 10), t.dueDate))}${t.startAfter.slice(10)}` : null,
           project_id: t.projectId,
           estimate_min: t.estimateMin,
           series_id: series.id,

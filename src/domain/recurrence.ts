@@ -225,6 +225,40 @@ function pickInMonth(p: RulePart, y: number, m: number): string | null {
   }
 }
 
+/**
+ * Rules without a day ("every week", "every month", "every year") take the day from the
+ * anchor (the task's due date): every week on the due date's weekday, every month on its
+ * day number (clamped to short months, never skipped), every year on its date.
+ */
+export function resolvePart(p: RulePart, anchor: string): RulePart {
+  const d = parseDateStr(anchor);
+  if (p.kind === 'weekly' && !p.days.length) return { ...p, days: [((d.getDay() + 6) % 7) as WeekdayIdx] };
+  if (p.kind === 'raw') {
+    const k = kv(p.rule);
+    if ([...k.keys()].every((x) => x === 'FREQ' || x === 'INTERVAL')) {
+      const interval = Math.max(1, intOr(k.get('INTERVAL'), 1));
+      if (k.get('FREQ') === 'MONTHLY') return { kind: 'monthDay', interval, day: d.getDate() };
+      if (k.get('FREQ') === 'YEARLY') return { kind: 'yearly', interval, month: d.getMonth() + 1, day: d.getDate() };
+    }
+  }
+  return p;
+}
+
+/**
+ * The month (as a running month index) whose occurrence `anchor` is. A working-day shift
+ * can move an occurrence into the neighbouring month (1 Aug on a Saturday -> 31 July), and
+ * intervals must count from the month the occurrence belongs to.
+ */
+function baseMonth(p: RulePart, anchor: string): number {
+  const a = parseDateStr(anchor);
+  const idx = a.getFullYear() * 12 + a.getMonth();
+  const pick = (i: number) => pickInMonth(p, Math.floor(i / 12), ((i % 12) + 12) % 12);
+  if (pick(idx) === anchor) return idx;
+  if (pick(idx + 1) === anchor) return idx + 1;
+  if (pick(idx - 1) === anchor) return idx - 1;
+  return idx;
+}
+
 /** First date of one part strictly after `after`, counting intervals from `anchor`. */
 function partNext(p: RulePart, anchor: string, after: string): string | null {
   if (p.kind === 'daily' || p.kind === 'weekly' || p.kind === 'raw') {
@@ -232,22 +266,22 @@ function partNext(p: RulePart, anchor: string, after: string): string | null {
     const n = r.after(toUtc(after), false);
     return n ? fromUtc(n) : null;
   }
-  const a = parseDateStr(anchor);
-  let y = a.getFullYear();
-  let m = a.getMonth();
-  let step = p.interval;
+  let start: number;
+  let step: number;
   if (p.kind === 'yearly') {
     // Start in the anchor year's target month; if that is before the anchor month, the
     // first occurrence is a year later.
-    if (p.month - 1 < m) y += 1;
-    m = p.month - 1;
+    const a = parseDateStr(anchor);
+    start = (a.getFullYear() + (p.month - 1 < a.getMonth() ? 1 : 0)) * 12 + (p.month - 1);
     step = 12 * p.interval;
+  } else {
+    start = baseMonth(p, anchor);
+    step = p.interval;
   }
   // A working-day shift can move a date into the neighbouring month, so look one step back.
-  const startOffset = p.kind === 'workdayOnOrAfter' ? -step : 0;
-  for (let i = startOffset / step; i < 5000; i++) {
-    const mm = m + i * step;
-    const d = pickInMonth(p, y + Math.floor(mm / 12), ((mm % 12) + 12) % 12);
+  for (let i = -1; i < 5000; i++) {
+    const mm = start + i * step;
+    const d = pickInMonth(p, Math.floor(mm / 12), ((mm % 12) + 12) % 12);
     if (d && d > after && (i >= 0 || d >= anchor)) return d;
   }
   return null;
@@ -257,7 +291,7 @@ function partNext(p: RulePart, anchor: string, after: string): string | null {
 export function nextInSet(parts: RulePart[], anchor: string, after: string): string | null {
   let best: string | null = null;
   for (const p of parts) {
-    const n = partNext(p, anchor, after);
+    const n = partNext(resolvePart(p, anchor), anchor, after);
     if (n && (!best || n < best)) best = n;
   }
   return best;
@@ -316,29 +350,20 @@ export function firstDueOnOrAfter(rule: string, from: string): string | null {
 }
 
 /**
- * The next `count` dates, for the preview under the rule builder. In schedule mode the dates
- * follow the calendar from `anchor`; in after_completion mode each date assumes the task is
- * done on its due day.
+ * The dates the task will be due on, for the preview under the rule builder: the current due
+ * date (when it is today or later), then each next date as completing on time would create it.
+ * Uses the same code as completion, so the preview cannot disagree with what happens.
  */
-export function upcomingDates(rule: string, mode: RecurrenceMode, anchor: string, from: string, count = 5): string[] {
-  const parts = parseRuleSet(rule);
+export function upcomingDates(rule: string, mode: RecurrenceMode, due: string | null, today: string, count = 5): string[] {
+  parseRuleSet(rule);
   const out: string[] = [];
-  if (mode === 'after_completion') {
-    let d = from;
-    for (let i = 0; i < count; i++) {
-      const n = nextDueDate(rule, mode, null, d);
-      if (!n) break;
-      out.push(n);
-      d = n;
-    }
-    return out;
-  }
-  let after = addDays(from, -1);
-  for (let i = 0; i < count; i++) {
-    const n = nextInSet(parts, anchor > from ? from : anchor, after);
-    if (!n) break;
+  let cur: string | null = due;
+  if (due && due >= today) out.push(due);
+  while (out.length < count) {
+    const n = mode === 'after_completion' ? nextDueDate(rule, mode, cur, cur && cur > today ? cur : today) : nextDueDate(rule, mode, cur, today);
+    if (!n || (cur && n <= cur)) break;
     out.push(n);
-    after = n;
+    cur = n;
   }
   return out;
 }
@@ -393,11 +418,11 @@ export function describePart(p: RulePart): string {
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Plain-language summary, e.g. "Every 2 weeks on Monday, counted from completion". */
-export function describeRule(rule: string, mode: RecurrenceMode): string {
+export function describeRule(rule: string, mode: RecurrenceMode, anchor?: string | null): string {
   let text: string;
   try {
     const parts = parseRuleSet(rule);
-    const bits = parts.map(describePart);
+    const bits = parts.map((p) => describePart(anchor && mode === 'schedule' ? resolvePart(p, anchor) : p));
     text = cap(bits.join(', plus '));
   } catch {
     text = rule;
