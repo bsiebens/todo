@@ -59,7 +59,7 @@ export async function run(db: Db, appUrl: string): Promise<void> {
     console.log(`ToDo server listening on :${port} for ${appUrl}`);
   });
   if (!(await auth.accountId())) {
-    console.log(`Not set up yet. Open ${appUrl}, go to Settings > Sync and enter the setup code: ${setupCode}`);
+    console.log(`Not set up yet. Open ${appUrl} and enter the setup code on the sign-in screen: ${setupCode}`);
   }
 
   const every = (ms: number, fn: () => Promise<unknown>) => setInterval(() => fn().catch((e) => console.error(e)), ms);

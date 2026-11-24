@@ -20,7 +20,7 @@ export function downloadExport(store: Store) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-export function SettingsView({ initialCode, onNavigate, onImport }: { initialCode?: string | null; onNavigate: (v: View) => void; onImport: () => void }) {
+export function SettingsView({ onNavigate, onImport }: { onNavigate: (v: View) => void; onImport: () => void }) {
   const store = useStore();
   const s = useSnapshot();
   const now = useNow();
@@ -30,7 +30,7 @@ export function SettingsView({ initialCode, onNavigate, onImport }: { initialCod
     <div className="settings">
       <div className="viewhead"><h1>Settings</h1></div>
 
-      <SyncSettings initialCode={initialCode} />
+      <SyncSettings />
 
       {isDesktop && (
         <>

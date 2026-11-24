@@ -129,7 +129,7 @@ export function createApp(deps: AppDeps): { server: Server; notifyChanged: (acco
         await deps.mailer.send(
           deps.ownerEmail,
           `ToDo sign-in code: ${code}`,
-          `Your sign-in code is ${code}\n\nType it in the app under Settings > Sync, or open this link on the device you want to sign in:\n${link}\n\nThe code works once and expires in 15 minutes. If you did not ask for it, ignore this email.`,
+          `Your sign-in code is ${code}\n\nType it on the sign-in screen, or open this link on the device you want to sign in:\n${link}\n\nThe code works once and expires in 15 minutes. If you did not ask for it, ignore this email.`,
         );
       }
       return send(res, 200, { ok: true });

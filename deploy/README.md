@@ -26,7 +26,7 @@ docker compose logs app
 The log ends with a line like:
 
 ```
-Not set up yet. Open https://todo.example.com, go to Settings > Sync and enter the setup code: VNRR-M84W
+Not set up yet. Open https://todo.example.com and enter the setup code on the sign-in screen: VNRR-M84W
 ```
 
 Keep that code for step 3.
@@ -83,8 +83,10 @@ Cloudflare Tunnel or Tailscale Funnel work too: point them at `http://localhost:
 
 ## 3. Sign in your devices
 
-1. **First device**: open the app, go to **Settings**, enter the setup code from the log under **Sync and sign-in**, press **Set up**. Anything already on this device is uploaded.
-2. **Add a passkey** (recommended): on that device press **Add a passkey on this device**. Passkeys made on an iPhone, iPad or Mac sync through iCloud Keychain, so those devices can then use **Sign in with a passkey**.
+The app shows nothing until a device is signed in: the web app opens on a sign-in screen, and the desktop app stays locked until it is paired with this server. A device that is signed in keeps working offline. Signing a device out, or signing it out from another device, brings the sign-in screen back.
+
+1. **First device**: open the app, enter the setup code from the log on the sign-in screen and press **Set up**. Anything already on this device is uploaded.
+2. **Add a passkey** (recommended): on that device go to **Settings > Sync and sign-in** and press **Add passkey**. Passkeys made on an iPhone, iPad or Mac sync through iCloud Keychain, so those devices can then use **Sign in with a passkey**.
 3. **Other devices**: either **Sign in with a passkey**, or on a signed-in device press **Show a one-time code** and type the code on the new device. The code works once and for 10 minutes. This is the easiest route for the office PC if passkeys are not allowed there.
 4. **iPhone and iPad**: open the address in Safari, then Share, **Add to Home Screen**, and open the app from the Home Screen before signing in. The Home Screen app has its own storage, separate from Safari, and only the Home Screen app can show notifications.
 
