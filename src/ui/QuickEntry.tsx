@@ -67,6 +67,7 @@ export function QuickEntry() {
         }),
       );
       await reset();
+      void t.invoke('quick_ready').catch(() => {});
     });
     return () => {
       gone = true;
