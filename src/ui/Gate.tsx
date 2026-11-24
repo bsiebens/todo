@@ -28,6 +28,11 @@ export function SignInGate({ children }: { children: ReactNode }) {
           <h1>ToDo</h1>
         </div>
         <p className="gate-lead">{isDesktop ? 'Connect this computer to your ToDo server to start.' : 'Sign in to open your tasks.'}</p>
+        {!isDesktop && !window.isSecureContext && (
+          <p className="form-error gate-warn" role="alert">
+            This is a plain http:// address. Open the app at its https:// address instead: here the browser does not keep your data and passkeys do not work.
+          </p>
+        )}
         <SignIn initialCode={linkCode} />
       </div>
     </main>

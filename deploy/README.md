@@ -39,14 +39,16 @@ Data lives in `deploy/data/postgres`, backups in `deploy/backups`.
 | --- | --- |
 | `APP_URL` | The address you open the app at, for example `https://todo.example.com`. Passkeys are tied to this host name, so choose it once. |
 | `POSTGRES_PASSWORD` | Any long random string, for example from `openssl rand -hex 24`. Any characters work; put it in single quotes if it contains `$`. Choose it before the first start (see Database password below). |
-| `PORT` | Port on the home server for the reverse proxy to forward to. Default 8080. |
+| `PORT` | Port on the home server for the reverse proxy to forward to (for example `192.168.1.10:8777`). Default 8080. Inside the container the app always uses 8080. |
 | `SETUP_CODE` | Optional. Your own code for setting up the first device. Otherwise one is generated and shown in the log. |
 | `OWNER_EMAIL`, `SMTP_URL`, `MAIL_FROM` | Optional. Turns on "Email me a code". Only `OWNER_EMAIL` can receive codes. `SMTP_URL` looks like `smtps://user:password@smtp.example.com:465`. |
 | `CORS_ORIGINS` | Optional, comma-separated. Other web origins allowed to call the API. The desktop app is always allowed and needs nothing here. |
 
 ## 2. Reverse proxy
 
-Forward your HTTPS name to `http://<home-server>:8080`. WebSockets must be passed through (most proxies do this by default; nginx needs the two `Upgrade` lines).
+Always open the app at its HTTPS address. The plain `http://<home-server>:<PORT>` address is only for checking that the server answers (`curl http://<home-server>:<PORT>/api/health`): browsers don't allow storage that survives a reload, passkeys or notifications on plain HTTP.
+
+Forward your HTTPS name to `http://<home-server>:<PORT>` (8080 unless you changed `PORT`). WebSockets must be passed through (most proxies do this by default; nginx needs the two `Upgrade` lines).
 
 Caddy:
 
