@@ -96,7 +96,7 @@ export function DesktopSettings() {
       <div className="srow">
         <div className="srow-text">
           <div className="srow-title">Quick add from anywhere</div>
-          <div className="srow-sub">Brings ToDo up with a new task ready, from any app. Click the field and press the keys you want.</div>
+          <div className="srow-sub">Opens a small window that adds a task to the Inbox, from any app. Click the field and press the keys you want.</div>
         </div>
         <ShortcutInput value={prefs.hotkey} onChange={(hotkey) => set({ hotkey })} />
       </div>

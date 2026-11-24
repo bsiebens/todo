@@ -1,14 +1,12 @@
 import { dueReminders } from '../domain/reminders';
 import type { Store } from '../db/store';
-import { DEFAULT_PREFS, parsePrefs, pruneFired, reminderTasks, type DesktopPrefs } from './desktop-core';
+import { quickAddTask } from '../db/quick-add';
+import { answerQuickEntry, DEFAULT_PREFS, parsePrefs, pruneFired, QUICK_ENTRY_DONE, QUICK_ENTRY_SAVE, reminderTasks, type DesktopPrefs, type QuickEntrySave } from './desktop-core';
 
 /** True inside the Tauri desktop app (Windows, macOS, Linux); false in a browser or the installed PWA. */
 export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform || navigator.userAgent);
-
-/** Fired on window when quick add should open (tray menu or global shortcut). */
-export const QUICK_ADD_EVENT = 'todo:quick-add';
 
 const PREFS_KEY = 'todo.desktop.prefs';
 const FIRED_KEY = 'todo.desktop.reminders-shown';
@@ -31,9 +29,9 @@ async function invoke(cmd: string, args?: Record<string, unknown>) {
   return invoke(cmd, args);
 }
 
+/** The small quick-entry window, on top of whatever app is in front. */
 function openQuickAdd() {
-  void invoke('show_window');
-  window.dispatchEvent(new Event(QUICK_ADD_EVENT));
+  void invoke('show_quick_entry');
 }
 
 /** Registers the global shortcut, replacing the previous one. Throws if another app already has it. */
@@ -138,8 +136,13 @@ export async function startDesktop(store: Store, signedIn: () => boolean): Promi
   } catch {
     prefs = DEFAULT_PREFS;
   }
-  const { listen } = await import('@tauri-apps/api/event');
-  await listen('quick-add', () => window.dispatchEvent(new Event(QUICK_ADD_EVENT)));
+  const { emitTo, listen } = await import('@tauri-apps/api/event');
+  // The quick-entry window hands its line to this window, which owns the data, so the
+  // new task shows up here and goes out with the next sync.
+  await listen<QuickEntrySave>(QUICK_ENTRY_SAVE, async (e) => {
+    const done = await answerQuickEntry(e.payload, signedIn(), (text) => quickAddTask(store, text));
+    await emitTo('quick', QUICK_ENTRY_DONE, done);
+  });
   await invoke('set_close_to_tray', { enabled: prefs.closeToTray }).catch(() => {});
   await registerHotkey(prefs.hotkey).catch((e) => console.warn('global shortcut not registered', e));
   // Ctrl+Q / Cmd+Q quits for real (the close button only hides to the tray).

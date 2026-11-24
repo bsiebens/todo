@@ -23,7 +23,7 @@ Design: see the "ToDo App: Technical & UI Design" doc. This repository holds pha
 - Sync between devices through your own server: per-field merge, works offline, live updates while open
 - Sign-in with passkeys, a one-time code from another device, or a code by email; devices can be signed out remotely
 - Reminders by Web Push: at the due time (or before) and a morning summary
-- Desktop app: tray icon, global quick-add shortcut, native reminder notifications, start at login. Installers are on the Releases page; see [docs/desktop.md](docs/desktop.md), which also covers releasing a new version
+- Desktop app: tray icon, global shortcut that opens a small quick-entry window (Ctrl+Alt+N), native reminder notifications, start at login. Installers are on the Releases page; see [docs/desktop.md](docs/desktop.md), which also covers releasing a new version
 
 ## Development
 

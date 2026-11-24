@@ -18,7 +18,6 @@ import { TaskDetail } from './TaskDetail';
 import { TaskList } from './TaskList';
 import { useDerived, useSnapshot, useStore, useSync, useSyncStatus } from './state';
 import { selectView, type View } from './views';
-import { QUICK_ADD_EVENT } from '../platform/desktop';
 
 const isPhone = () => window.matchMedia('(max-width: 719px)').matches;
 
@@ -85,14 +84,6 @@ export function App() {
     if (isPhone()) setSheet(true);
     else quickRef.current?.focus();
   }, []);
-
-  // Tray menu and global shortcut in the desktop app.
-  useEffect(() => {
-    // The window may have been hidden; give it a moment to take focus first.
-    const open = () => setTimeout(openQuickAdd, 50);
-    window.addEventListener(QUICK_ADD_EVENT, open);
-    return () => window.removeEventListener(QUICK_ADD_EVENT, open);
-  }, [openQuickAdd]);
 
   // Keyboard shortcuts (desktop): j/k move, x done, s start/pause, e edit title, n note, / search,
   // Ctrl/Cmd+K quick add, Ctrl/Cmd+P (or Ctrl/Cmd+Shift+P) command palette.

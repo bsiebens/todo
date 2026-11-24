@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { toDateStr } from '../domain/dates';
-import { parseQuickAdd } from '../domain/quickadd';
 import type { Id, Status, Task } from '../domain/types';
+import { quickAddTask } from '../db/quick-add';
 import { StoreError } from '../db/store';
 import { useStore } from './state';
 
@@ -40,24 +39,7 @@ export function ActionsProvider({ children }: { children: ReactNode }) {
     [store, notify],
   );
 
-  const quickAdd = useCallback(
-    async (text: string, defaults?: { projectId?: Id | null }) => {
-      const r = parseQuickAdd(text, toDateStr(new Date()));
-      if (!r.title) return null;
-      const projectId = r.projectPath ? await store.ensureProjectPath(r.projectPath) : (defaults?.projectId ?? null);
-      return store.createTask({
-        title: r.title,
-        priority: r.priority ?? 0,
-        dueDate: r.dueDate,
-        dueTime: r.dueTime,
-        projectId,
-        estimateMin: r.estimateMin,
-        tagNames: r.tags,
-        recurrence: r.rule ? { rule: r.rule, mode: r.mode } : null,
-      });
-    },
-    [store],
-  );
+  const quickAdd = useCallback((text: string, defaults?: { projectId?: Id | null }) => quickAddTask(store, text, defaults), [store]);
 
   const confirmOverride = async () => {
     if (!override || !reason.trim()) return;

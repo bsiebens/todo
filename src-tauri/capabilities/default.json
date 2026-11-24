@@ -1,11 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the ToDo window may do",
-  "windows": ["main"],
+  "description": "What the ToDo windows (main and quick entry) may do",
+  "windows": ["main", "quick"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
+    "core:window:allow-hide",
     "core:window:allow-set-focus",
     "core:window:allow-unminimize",
     "notification:default",
