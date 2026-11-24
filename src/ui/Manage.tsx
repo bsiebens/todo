@@ -56,17 +56,23 @@ export function SettingsView() {
             <div>Theme</div>
             <div className="small muted">System follows your device's light or dark setting. Saved on this device only.</div>
           </div>
-          <ThemeSwitch />
+          <ThemeSwitch full />
         </div>
       </div>
 
       <h2>Home or office</h2>
-      <div className="card fields">
+      <div className="card">
+      <p className="card-help">
+        Your context tells the app where you are. Tasks in projects set to <b>Office</b> rank higher while you are at the office and lower at home, and the
+        other way round for <b>Home</b>. Give a project its context under <b>Projects &gt; Manage</b> (sub-projects inherit it). <b>Automatic</b> switches to
+        Office during the days and hours below. You can also switch any time with the Home/Office button at the top of the screen.
+      </p>
+      <div className="fields">
         <label htmlFor="ctx">Context</label>
         <select id="ctx" value={st.contextMode} onChange={(e) => store.saveSettings({ contextMode: e.target.value as typeof st.contextMode })}>
-          <option value="auto">Automatic (office hours below), now: {currentContext(st, now)}</option>
-          <option value="office">Always office</option>
+          <option value="auto">Automatic, now {currentContext(st, now) === 'office' ? 'Office' : 'Home'}</option>
           <option value="home">Always home</option>
+          <option value="office">Always office</option>
         </select>
         <label>Office days</label>
         <div className="inline">
@@ -87,6 +93,7 @@ export function SettingsView() {
           <span>to</span>
           <input type="time" aria-label="Office end" value={st.officeEnd} onChange={(e) => store.saveSettings({ officeEnd: e.target.value })} />
         </div>
+      </div>
       </div>
 
       <h2>Urgency weights</h2>

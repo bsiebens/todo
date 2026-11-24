@@ -4,10 +4,10 @@ import { THEME_PREFS, useTheme, type ThemePref } from './theme';
 const ICONS: Record<ThemePref, IconName> = { system: 'system', light: 'sun', dark: 'moon' };
 
 /** Segmented System / Light / Dark control. `compact` shows icons only (sidebar footer). */
-export function ThemeSwitch({ compact = false }: { compact?: boolean }) {
+export function ThemeSwitch({ compact = false, full = false }: { compact?: boolean; full?: boolean }) {
   const { pref, setPref } = useTheme();
   return (
-    <div className={`segmented ${compact ? 'compact' : ''}`} role="radiogroup" aria-label="Appearance">
+    <div className={`segmented ${compact ? 'compact' : ''} ${full ? 'full' : ''}`} role="radiogroup" aria-label="Appearance">
       {THEME_PREFS.map((p) => (
         <button
           key={p.value}
