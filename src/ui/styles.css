@@ -170,6 +170,14 @@ kbd { font-family: inherit; font-size: 11px; color: var(--text-3); border: 1px s
 .small { font-size: 13px; }
 .fatal { padding: 24px; }
 
+/* Sign-in screen: shown instead of the app until this device is signed in. */
+.gate { min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start; padding: max(10vh, env(safe-area-inset-top)) 16px 32px; }
+.gate-box { width: 100%; max-width: 640px; }
+.gate-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.gate-brand img { border-radius: 9px; }
+.gate-brand h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+.gate-lead { margin: 0 0 18px; color: var(--text-2); }
+
 /* ==========================================================================
    Buttons and small controls
    ========================================================================== */

@@ -10,7 +10,12 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgres://todo:${POSTGRES_PASSWORD}@db:5432/todo
+      # Separate settings instead of a postgres:// URL, so any password works without encoding.
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: todo
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: todo
     ports:
       - "${PORT:-8080}:8080"
     depends_on:

@@ -26,7 +26,7 @@ docker compose logs app
 The log ends with a line like:
 
 ```
-Not set up yet. Open https://todo.example.com, go to Settings > Sync and enter the setup code: VNRR-M84W
+Not set up yet. Open https://todo.example.com and enter the setup code on the sign-in screen: VNRR-M84W
 ```
 
 Keep that code for step 3.
@@ -38,7 +38,7 @@ Data lives in `deploy/data/postgres`, backups in `deploy/backups`.
 | Setting | What |
 | --- | --- |
 | `APP_URL` | The address you open the app at, for example `https://todo.example.com`. Passkeys are tied to this host name, so choose it once. |
-| `POSTGRES_PASSWORD` | Any long random string. |
+| `POSTGRES_PASSWORD` | Any long random string, for example from `openssl rand -hex 24`. Any characters work; put it in single quotes if it contains `$`. Choose it before the first start (see Database password below). |
 | `PORT` | Port on the home server for the reverse proxy to forward to. Default 8080. |
 | `SETUP_CODE` | Optional. Your own code for setting up the first device. Otherwise one is generated and shown in the log. |
 | `OWNER_EMAIL`, `SMTP_URL`, `MAIL_FROM` | Optional. Turns on "Email me a code". Only `OWNER_EMAIL` can receive codes. `SMTP_URL` looks like `smtps://user:password@smtp.example.com:465`. |
@@ -83,12 +83,25 @@ Cloudflare Tunnel or Tailscale Funnel work too: point them at `http://localhost:
 
 ## 3. Sign in your devices
 
-1. **First device**: open the app, go to **Settings**, enter the setup code from the log under **Sync and sign-in**, press **Set up**. Anything already on this device is uploaded.
-2. **Add a passkey** (recommended): on that device press **Add a passkey on this device**. Passkeys made on an iPhone, iPad or Mac sync through iCloud Keychain, so those devices can then use **Sign in with a passkey**.
+The app shows nothing until a device is signed in: the web app opens on a sign-in screen, and the desktop app stays locked until it is paired with this server. A device that is signed in keeps working offline. Signing a device out, or signing it out from another device, brings the sign-in screen back.
+
+1. **First device**: open the app, enter the setup code from the log on the sign-in screen and press **Set up**. Anything already on this device is uploaded.
+2. **Add a passkey** (recommended): on that device go to **Settings > Sync and sign-in** and press **Add passkey**. Passkeys made on an iPhone, iPad or Mac sync through iCloud Keychain, so those devices can then use **Sign in with a passkey**.
 3. **Other devices**: either **Sign in with a passkey**, or on a signed-in device press **Show a one-time code** and type the code on the new device. The code works once and for 10 minutes. This is the easiest route for the office PC if passkeys are not allowed there.
 4. **iPhone and iPad**: open the address in Safari, then Share, **Add to Home Screen**, and open the app from the Home Screen before signing in. The Home Screen app has its own storage, separate from Safari, and only the Home Screen app can show notifications.
 
 Each device can be signed out from any other device under **Signed-in devices**.
+
+### Database password
+
+Postgres stores the password the first time the `db` container starts, in `data/postgres`. Changing `POSTGRES_PASSWORD` in `.env` later does not change it, and the app then stops with "Postgres refused the password". Either put the old password back, or change it inside the database too:
+
+```sh
+docker compose exec db psql -U todo -d todo -c "ALTER USER todo PASSWORD 'the-new-password'"
+docker compose up -d
+```
+
+On a fresh install with nothing in it yet, you can also start over: `docker compose down`, delete `data/postgres`, then `docker compose up -d`.
 
 **Locked out?** (lost all devices and passkeys) On the server run
 

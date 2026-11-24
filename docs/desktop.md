@@ -19,7 +19,7 @@ Tasks are stored in a SQLite file in the app's data folder:
 
 ## Syncing with your server
 
-Open Settings, type your server's address (for example `https://todo.your-domain`) and press Connect. Then sign in with a one-time code: on a signed-in device open Settings > Sync > *Show a one-time code*. (Passkeys can't be used from the desktop app, because they are tied to your server's web address. Add them in the browser or on your phone.)
+The app stays locked until it is connected to your server. When it opens, type your server's address (for example `https://todo.your-domain`) and press Connect. Then sign in with a one-time code: on a signed-in device open Settings > Sync > *Show a one-time code*. (Passkeys can't be used from the desktop app, because they are tied to your server's web address. Add them in the browser or on your phone.)
 
 The server allows the desktop app's requests out of the box (origins `tauri://localhost` and `https://tauri.localhost`); no server change is needed beyond updating to this version. Use an `https://` address: Windows blocks plain `http://` from the app.
 

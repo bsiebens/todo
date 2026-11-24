@@ -4,6 +4,7 @@ import { createWorkerDriver } from './db/worker-driver';
 import { Store } from './db/store';
 import { ActionsProvider } from './ui/actions';
 import { App } from './ui/App';
+import { SignInGate } from './ui/Gate';
 import { StoreContext, SyncContext } from './ui/state';
 import { SyncClient } from './sync/client';
 import { refreshPush } from './sync/push';
@@ -25,16 +26,18 @@ async function start() {
     // Only one tab may own the database; a second tab (memory storage) does not sync.
     if (store.persistent) {
       sync.start();
-      if (isDesktop) startDesktop(store).catch((e) => console.warn('desktop features failed to start', e));
+      if (isDesktop) startDesktop(store, () => sync.signedIn).catch((e) => console.warn('desktop features failed to start', e));
       else refreshPush(sync);
     }
     root.render(
       <StrictMode>
         <StoreContext.Provider value={store}>
           <SyncContext.Provider value={sync}>
-            <ActionsProvider>
-              <App />
-            </ActionsProvider>
+            <SignInGate>
+              <ActionsProvider>
+                <App />
+              </ActionsProvider>
+            </SignInGate>
           </SyncContext.Provider>
         </StoreContext.Provider>
       </StrictMode>,

@@ -51,19 +51,19 @@ function useBusy() {
   return { busy, error, run, setError };
 }
 
-export function SyncSettings({ initialCode }: { initialCode?: string | null }) {
+export function SyncSettings() {
   const status = useSyncStatus();
   return (
     <>
       <h2>Sync and sign-in</h2>
-      {status.state === 'signed_out' ? <SignIn initialCode={initialCode} /> : <SignedIn />}
+      {status.state === 'signed_out' ? <SignIn /> : <SignedIn />}
       <h2>Reminders</h2>
       <Reminders />
     </>
   );
 }
 
-function SignIn({ initialCode }: { initialCode?: string | null }) {
+export function SignIn({ initialCode }: { initialCode?: string | null }) {
   const sync = useSync();
   const status = useSyncStatus();
   const [server, setServer] = useState<AuthStatus | 'unreachable' | null>(null);
@@ -117,8 +117,8 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
               )}
             </div>
             <div className="srow-sub">
-              {sync.baseUrl ? 'Check the address and that this computer can reach it.' : 'Type the address of your ToDo server to sync this computer with your other devices.'} Your tasks are safe on
-              this computer either way.
+              {sync.baseUrl ? 'Check the address and that this computer can reach it.' : 'Type the address of your ToDo server.'} After that, sign in
+              with a one-time code from a device that is already signed in.
             </div>
           </div>
           <form className="srow-form" onSubmit={(e) => (e.preventDefault(), connect())}>
@@ -159,9 +159,8 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
                   Running locally? Start it in a second terminal with <code>npm run dev:server</code> (no database needed); the setup code is printed there.
                 </>
               ) : (
-                'Sync works when the app is opened from your ToDo server. If that is this address, the server may be down or restarting.'
-              )}{' '}
-              Your tasks are safe on this device either way.
+                'Signing in needs the ToDo server. If this is its address, it may be down or restarting.'
+              )}
             </div>
           </div>
           <button className="btn" onClick={check}>Try again</button>
@@ -194,7 +193,7 @@ function SignIn({ initialCode }: { initialCode?: string | null }) {
       <div className="srow">
         <div className="srow-text">
           <div className="srow-title">This device</div>
-          <div className="srow-sub">Sign in to keep this device in step with your others. Tasks stay here too and work offline.</div>
+          <div className="srow-sub">The name shown in your list of signed-in devices. Once signed in, it also works offline.</div>
         </div>
         <input className="srow-input" aria-label="Device name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
       </div>
@@ -366,7 +365,7 @@ function SignedIn() {
       <div className="srow">
         <div className="srow-text">
           <div className="srow-title">Signed-in devices</div>
-          <div className="srow-sub">Signing out keeps the tasks on that device, but stops syncing them.</div>
+          <div className="srow-sub">A device that is signed out shows the sign-in screen again.</div>
         </div>
         <ul className="slist">
           {devices.map((d) => (

@@ -105,12 +105,13 @@ function loadFired(): Record<string, number> {
 /**
  * Checks for reminders every 30 seconds and shows each once as a native
  * notification. The desktop app doesn't use Web Push, so it works without the
- * sync server too; the reminder settings are the synced ones.
+ * server being reachable; the reminder settings are the synced ones.
  */
-function startReminders(store: Store) {
+function startReminders(store: Store, signedIn: () => boolean) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const check = async () => {
-    if (!prefs.notifications) return;
+    // Task titles stay hidden until the app is paired with the server.
+    if (!prefs.notifications || !signedIn()) return;
     const now = new Date();
     const due = dueReminders(reminderTasks(store.snapshot.tasks), store.snapshot.settings.reminders, now, tz);
     const fired = pruneFired(loadFired(), now.getTime());
@@ -131,7 +132,7 @@ function startReminders(store: Store) {
 }
 
 /** Wires up the desktop features. Call once, after the store is open. */
-export async function startDesktop(store: Store): Promise<void> {
+export async function startDesktop(store: Store, signedIn: () => boolean): Promise<void> {
   try {
     prefs = parsePrefs(localStorage.getItem(PREFS_KEY));
   } catch {
@@ -148,5 +149,5 @@ export async function startDesktop(store: Store): Promise<void> {
       void invoke('quit');
     }
   });
-  startReminders(store);
+  startReminders(store, signedIn);
 }

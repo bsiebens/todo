@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import nodemailer from 'nodemailer';
 import { createApp, type Mailer } from './app';
 import { Auth, newCode } from './auth';
-import { getKv, migrate, pgDb, setKv, type Db } from './db';
+import { dbConfig, dbErrorHint, getKv, migrate, pgDb, setKv, type Db } from './db';
 import { Notifier, webPushSender } from './notifier';
 import { SyncService } from './sync';
 
@@ -59,7 +59,7 @@ export async function run(db: Db, appUrl: string): Promise<void> {
     console.log(`ToDo server listening on :${port} for ${appUrl}`);
   });
   if (!(await auth.accountId())) {
-    console.log(`Not set up yet. Open ${appUrl}, go to Settings > Sync and enter the setup code: ${setupCode}`);
+    console.log(`Not set up yet. Open ${appUrl} and enter the setup code on the sign-in screen: ${setupCode}`);
   }
 
   const every = (ms: number, fn: () => Promise<unknown>) => setInterval(() => fn().catch((e) => console.error(e)), ms);
@@ -79,14 +79,15 @@ export async function run(db: Db, appUrl: string): Promise<void> {
 }
 
 if (!process.env.TODO_DEV) {
-  const databaseUrl = env('DATABASE_URL');
   const appUrl = env('APP_URL');
-  if (!databaseUrl || !appUrl) {
-    console.error('DATABASE_URL and APP_URL must be set. See deploy/README.md.');
+  const database = dbConfig(process.env);
+  if (!appUrl || !database.ok) {
+    console.error(`Cannot start: ${!appUrl ? 'APP_URL must be set (the https address you open the app at). ' : ''}${database.ok ? '' : database.error}`);
     process.exit(1);
   }
-  run(pgDb(databaseUrl), appUrl).catch((e) => {
-    console.error(e);
+  run(pgDb(database.config), appUrl).catch((e) => {
+    const hint = dbErrorHint(e);
+    console.error(hint ? `Cannot start: ${hint}\n(${(e as Error).message})` : e);
     process.exit(1);
   });
 }

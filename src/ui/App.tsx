@@ -30,13 +30,7 @@ export function App() {
   const { setPref } = useTheme();
   const sync = useSync();
   const syncStatus = useSyncStatus();
-  // A sign-in link from the email (#signin=CODE) opens Settings with the code filled in.
-  const [linkCode] = useState(() => {
-    const m = /^#signin=([A-Za-z0-9-]+)$/.exec(location.hash);
-    if (m) history.replaceState(null, '', location.pathname + location.search);
-    return m?.[1] ?? null;
-  });
-  const [view, setView] = useState<View>(() => (linkCode ? { kind: 'settings' } : { kind: 'focus' }));
+  const [view, setView] = useState<View>({ kind: 'focus' });
   const [selected, setSelected] = useState<Id | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [sheet, setSheet] = useState(false);
@@ -291,7 +285,7 @@ export function App() {
         <div className="main">
           <main className="list">
             <div className="list-inner">
-              {view.kind === 'settings' && <SettingsView initialCode={linkCode} onNavigate={navigate} onImport={() => setImporting(true)} />}
+              {view.kind === 'settings' && <SettingsView onNavigate={navigate} onImport={() => setImporting(true)} />}
               {view.kind === 'urgency' && <TuningView />}
               {view.kind === 'analytics' && <AnalyticsView onNavigate={navigate} />}
               {view.kind === 'projects' && <ProjectsView onOpen={(id) => navigate({ kind: 'project', id })} />}
