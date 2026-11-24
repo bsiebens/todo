@@ -2,7 +2,7 @@ import { DependencyGraph } from '../domain/dependencies';
 import { toDateStr } from '../domain/dates';
 import { uuidv7 } from '../domain/ids';
 import { ProjectTree } from '../domain/projects';
-import { nextDueDate } from '../domain/recurrence';
+import { firstDueOnOrAfter, nextDueDate, ruleError } from '../domain/recurrence';
 import { checkTransition, STATUS_LABELS } from '../domain/status';
 import type { Context, Dependency, Id, Note, Priority, Project, RecurrenceMode, RecurrenceSeries, Status, Tag, Task } from '../domain/types';
 import { DEFAULT_WEIGHTS, type UrgencyWeights } from '../domain/urgency';
@@ -44,6 +44,14 @@ export interface Snapshot {
   deps: Dependency[];
   series: RecurrenceSeries[];
   settings: Settings;
+}
+
+function safeFirstDue(rule: string): string | null {
+  try {
+    return firstDueOnOrAfter(rule, toDateStr(new Date()));
+  } catch {
+    return null;
+  }
 }
 
 export class StoreError extends Error {
@@ -327,7 +335,7 @@ export class Store {
       title: input.title.trim() || 'Untitled',
       description: input.description ?? '',
       priority: input.priority ?? 0,
-      due_date: input.dueDate ?? null,
+      due_date: input.dueDate ?? (input.recurrence ? safeFirstDue(input.recurrence.rule) : null),
       due_time: input.dueTime ?? null,
       project_id: input.projectId ?? null,
       estimate_min: input.estimateMin ?? null,
@@ -429,7 +437,12 @@ export class Store {
     const series = t.seriesId ? this.snapshot.series.find((s) => s.id === t.seriesId) : undefined;
     const alreadyHasOpen = series && this.snapshot.tasks.some((x) => x.seriesId === series.id && x.id !== id && (x.status === 'todo' || x.status === 'in_progress'));
     if (series && (to === 'done' || to === 'cancelled') && !alreadyHasOpen) {
-      const due = nextDueDate(series.rrule, series.mode, t.dueDate, toDateStr(new Date()));
+      let due: string | null = null;
+      try {
+        due = nextDueDate(series.rrule, series.mode, t.dueDate, toDateStr(new Date()));
+      } catch {
+        // A rule this version cannot read (e.g. from a newer device): finish the task, skip the copy.
+      }
       if (due) {
         nextId = uuidv7();
         const row = {
@@ -466,6 +479,8 @@ export class Store {
       ]);
       return;
     }
+    const err = ruleError(rec.rule);
+    if (err) throw new StoreError('invalid', err);
     if (t.seriesId) {
       await this.write([
         { sql: 'UPDATE recurrence_series SET rrule = ?, mode = ?, updated_at = ? WHERE id = ?', params: [rec.rule, rec.mode, now, t.seriesId] },
@@ -475,7 +490,7 @@ export class Store {
     const sid = uuidv7();
     await this.write([
       { sql: 'INSERT INTO recurrence_series (id, rrule, mode, updated_at) VALUES (?,?,?,?)', params: [sid, rec.rule, rec.mode, now] },
-      { sql: 'UPDATE task SET series_id = ?, due_date = COALESCE(due_date, ?), updated_at = ? WHERE id = ?', params: [sid, toDateStr(new Date()), now, taskId] },
+      { sql: 'UPDATE task SET series_id = ?, due_date = COALESCE(due_date, ?), updated_at = ? WHERE id = ?', params: [sid, firstDueOnOrAfter(rec.rule, toDateStr(new Date())) ?? toDateStr(new Date()), now, taskId] },
     ]);
   }
 

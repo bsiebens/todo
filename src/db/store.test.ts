@@ -53,6 +53,19 @@ describe('Store', () => {
     expect(again.nextId).toBeUndefined();
   });
 
+  it('combined working-day repeat rules give working days and reject bad rules', async () => {
+    const id = await store.createTask({ title: 'Pay invoices' });
+    const rule = 'FREQ=MONTHLY;BYMONTHDAY=15;X-WORKDAY=BEFORE\nFREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1';
+    await store.setRecurrence(id, { rule, mode: 'schedule' });
+    const due = store.task(id).dueDate!;
+    expect([1, 2, 3, 4, 5]).toContain(new Date(`${due}T12:00:00`).getDay());
+    const { nextId } = await store.setStatus(id, 'done');
+    const next = store.task(nextId!).dueDate!;
+    expect(next > due).toBe(true);
+    expect([1, 2, 3, 4, 5]).toContain(new Date(`${next}T12:00:00`).getDay());
+    await expect(store.setRecurrence(id, { rule: 'NONSENSE', mode: 'schedule' })).rejects.toMatchObject({ code: 'invalid' });
+  });
+
   it('builds nested projects from a path and refuses moving into a descendant', async () => {
     const acme = await store.ensureProjectPath('Work/Clients/Acme');
     const again = await store.ensureProjectPath('work/clients/acme');
