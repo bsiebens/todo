@@ -1,11 +1,12 @@
 name: Desktop app
 on:
   pull_request:
-    paths: ['src-tauri/**', 'src/platform/**', '.github/workflows/desktop.yml']
-  # Build installers by hand (Actions > Desktop app > Run workflow) or by pushing a tag like desktop-v0.1.0.
-  workflow_dispatch:
+    paths: ['src-tauri/**', 'src/platform/**', 'scripts/sync-version.mjs', 'package.json', '.github/workflows/desktop.yml']
+  # A version tag (v0.1.0) builds every system and publishes a GitHub Release with the installers.
   push:
-    tags: ['desktop-v*']
+    tags: ['v*']
+  # Test builds without a release: Actions > Desktop app > Run workflow. The installers are under the run's Artifacts.
+  workflow_dispatch:
 
 jobs:
   rust-tests:
@@ -13,6 +14,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - run: node scripts/sync-version.mjs --check
       - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev libxdo-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -36,6 +38,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # A tag must match the version in package.json (and the Rust package), so the
+      # installers' file names and the app's About line agree with the release.
+      - run: node scripts/sync-version.mjs --check ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
       - if: startsWith(matrix.os, 'ubuntu')
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev libxdo-dev
       - uses: actions/setup-node@v4
@@ -60,3 +65,37 @@ jobs:
             src-tauri/target/**/release/bundle/appimage/*.AppImage
             src-tauri/target/**/release/bundle/deb/*.deb
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Collect the installers
+        run: |
+          mkdir out
+          find installers -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} out/ \;
+          ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ToDo ${{ github.ref_name }}
+          files: out/*
+          generate_release_notes: true
+          body: |
+            ## Downloads
+
+            | System | File |
+            | --- | --- |
+            | Windows | `ToDo_*_x64-setup.exe` (installs for your user, no admin needed) or `ToDo_*_x64_en-US.msi` |
+            | macOS (Apple silicon and Intel) | `ToDo_*_universal.dmg` |
+            | Linux | `ToDo_*_amd64.AppImage` or `ToDo_*_amd64.deb` |
+
+            The installers are not code-signed yet. On Windows choose *More info > Run anyway*; on a Mac right-click the app and choose *Open* the first time.
+
+            The web app and sync server update by redeploying the container on the home server (see `deploy/README.md`).

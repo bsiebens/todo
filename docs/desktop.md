@@ -25,13 +25,30 @@ The server allows the desktop app's requests out of the box (origins `tauri://lo
 
 ## Getting the installers
 
-Builds run on GitHub Actions: open **Actions > Desktop app > Run workflow**, or push a tag such as `desktop-v0.1.0`. When it finishes, download the artifacts:
+Every version is published on the repository's **Releases** page (Code > Releases, on the right of the repository page). Each release has:
 
 - **Windows:** `ToDo_x.y.z_x64-setup.exe` installs for your user only, without admin rights. The `.msi` is there too if IT prefers it.
 - **macOS:** `ToDo_x.y.z_universal.dmg` (Apple silicon and Intel).
 - **Linux:** `.AppImage` and `.deb`.
 
 The installers are not code-signed yet. Windows SmartScreen shows "Windows protected your PC": choose *More info > Run anyway*. On a Mac, right-click the app and choose *Open* the first time. A locked-down office PC may refuse unsigned programs; the web app keeps working there either way.
+
+Settings > Data shows the version you are running.
+
+## Releasing a new version
+
+The version lives in `package.json` and is copied into the desktop app's Rust package (`src-tauri/Cargo.toml`) by `scripts/sync-version.mjs`. The app reads it at build time, so one number covers the web app, the installers and the tag. Use [semantic versioning](https://semver.org): `patch` for fixes, `minor` for new features, `major` for changes that need you to do something (for example a server update that older apps can't sync with).
+
+From an up-to-date `main`:
+
+```sh
+npm version minor          # or patch / major / 1.4.0: bumps package.json, syncs Cargo, commits, tags v1.4.0
+git push --follow-tags     # pushes the commit and the tag
+```
+
+The tag starts the **Desktop app** workflow. It checks that the tag matches the version, builds Windows, macOS and Linux (about 15 minutes), then publishes a GitHub Release named after the tag with the installers attached and notes listing the merged pull requests. If the tag doesn't match `package.json`, the build stops before anything is published.
+
+For a test build without a release, run **Actions > Desktop app > Run workflow**. The installers are then under **Artifacts** at the bottom of that run's page (kept for 90 days).
 
 ## Developing
 
