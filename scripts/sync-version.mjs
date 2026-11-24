@@ -6,8 +6,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
 const files = {
-  'src-tauri/Cargo.toml': /^(\[package\][\s\S]*?\nversion = ")[^"]+(")/,
-  'src-tauri/Cargo.lock': /(\nname = "todo-desktop"\nversion = ")[^"]+(")/,
+  // \r?\n: on Windows, git checks the files out with CRLF line endings.
+  'src-tauri/Cargo.toml': /^(\[package\][\s\S]*?\r?\nversion = ")[^"]+(")/,
+  'src-tauri/Cargo.lock': /(\r?\nname = "todo-desktop"\r?\nversion = ")[^"]+(")/,
 };
 
 const args = process.argv.slice(2);
