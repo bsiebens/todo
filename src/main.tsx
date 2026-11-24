@@ -7,6 +7,8 @@ import { App } from './ui/App';
 import { StoreContext, SyncContext } from './ui/state';
 import { SyncClient } from './sync/client';
 import { refreshPush } from './sync/push';
+import { isDesktop, startDesktop } from './platform/desktop';
+import { createDesktopDriver } from './platform/desktop-driver';
 import './ui/styles.css';
 import { initTheme } from './ui/theme';
 
@@ -16,13 +18,15 @@ const root = createRoot(document.getElementById('root')!);
 
 async function start() {
   try {
-    const store = await Store.open(await createWorkerDriver());
+    const store = await Store.open(await (isDesktop ? createDesktopDriver() : createWorkerDriver()));
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
-    const sync = await SyncClient.create(store);
+    // The desktop app is not served by the sync server, so it keeps the server's address.
+    const sync = await SyncClient.create(store, { baseUrl: isDesktop ? ((await store.getSyncState('server_url')) ?? '') : '' });
     // Only one tab may own the database; a second tab (memory storage) does not sync.
-    if (store.storage === 'OPFS') {
+    if (store.persistent) {
       sync.start();
-      refreshPush(sync);
+      if (isDesktop) startDesktop(store).catch((e) => console.warn('desktop features failed to start', e));
+      else refreshPush(sync);
     }
     root.render(
       <StrictMode>

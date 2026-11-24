@@ -7,16 +7,23 @@
     "dev": "vite",
     "dev:server": "esbuild server/dev.ts --bundle --platform=node --target=node22 --format=cjs --external:pg-native --external:@electric-sql/pglite --outfile=dist-server/dev.cjs --log-level=warning && node dist-server/dev.cjs",
     "build": "tsc -b && tsc -p server && vite build && npm run build:server",
+    "build:web": "tsc -b && vite build",
     "build:server": "esbuild server/main.ts --bundle --platform=node --target=node22 --format=cjs --external:pg-native --outfile=dist-server/server.cjs --log-level=warning",
     "start": "node dist-server/server.cjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b && tsc -p server"
+    "typecheck": "tsc -b && tsc -p server",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.1.0",
     "@sqlite.org/sqlite-wasm": "^3.54.1-build1",
+    "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-autostart": "^2.7.0",
+    "@tauri-apps/plugin-global-shortcut": "^2.4.1",
+    "@tauri-apps/plugin-notification": "^2.8.1",
     "nodemailer": "^10.6.1",
     "pg": "^8.23.1",
     "react": "^19.3.1",
@@ -27,6 +34,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.6.0",
+    "@tauri-apps/cli": "^2.12.6",
     "@types/node": "^26.6.6",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",

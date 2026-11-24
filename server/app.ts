@@ -23,7 +23,17 @@ export interface AppDeps {
   ownerEmail?: string;
   mailer?: Mailer;
   staticDir?: string;
+  /** Extra origins (besides the desktop app's) that may call the API from another site. */
+  corsOrigins?: string[];
 }
+
+/**
+ * Where the desktop app's pages come from: tauri://localhost on macOS and Linux,
+ * https://tauri.localhost on Windows. The API is authorised by a bearer token
+ * (never a cookie), so letting these origins read responses exposes nothing a
+ * signed-out page could use.
+ */
+export const DESKTOP_ORIGINS = ['tauri://localhost', 'https://tauri.localhost', 'http://tauri.localhost'];
 
 class HttpError extends Error {
   constructor(
@@ -77,6 +87,7 @@ const MIME: Record<string, string> = {
 
 export function createApp(deps: AppDeps): { server: Server; notifyChanged: (accountId: string, exceptDevice?: string) => void } {
   const { auth, sync, notifier, db } = deps;
+  const allowed = new Set([...DESKTOP_ORIGINS, ...(deps.corsOrigins ?? [])]);
   const sockets = new Map<string, Set<{ ws: WebSocket; deviceId: string }>>();
 
   const notifyChanged = (accountId: string, exceptDevice?: string) => {
@@ -229,7 +240,22 @@ export function createApp(deps: AppDeps): { server: Server; notifyChanged: (acco
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
     try {
-      if (url.pathname.startsWith('/api/')) await api(req, res, url);
+      if (url.pathname.startsWith('/api/')) {
+        const origin = req.headers.origin;
+        if (origin && allowed.has(origin)) {
+          res.setHeader('access-control-allow-origin', origin);
+          res.setHeader('vary', 'Origin');
+          if (req.method === 'OPTIONS') {
+            res.writeHead(204, {
+              'access-control-allow-methods': 'GET, POST, DELETE',
+              'access-control-allow-headers': 'authorization, content-type',
+              'access-control-max-age': '86400',
+            });
+            return res.end();
+          }
+        }
+        await api(req, res, url);
+      }
       else serveStatic(req, res, url);
     } catch (e) {
       if (e instanceof HttpError || e instanceof AuthError) return send(res, e.status, { error: e.message });

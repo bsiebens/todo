@@ -91,6 +91,11 @@ export class Store {
     return this.db.storage;
   }
 
+  /** Data survives a restart: OPFS in the browser, a file in the desktop app. */
+  get persistent() {
+    return this.db.storage === 'OPFS' || this.db.storage === 'file';
+  }
+
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

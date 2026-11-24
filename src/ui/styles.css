@@ -654,3 +654,4 @@ textarea.desc { width: 100%; min-height: 96px; resize: vertical; line-height: 1.
   .picker-list { max-height: 55vh; }
   .picker-opt { min-height: 44px; }
 }
+.shortcut { width: 14em; cursor: pointer; text-align: center; caret-color: transparent; }

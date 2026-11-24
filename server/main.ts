@@ -51,6 +51,7 @@ export async function run(db: Db, appUrl: string): Promise<void> {
     ownerEmail,
     mailer,
     staticDir: resolve(env('STATIC_DIR') ?? 'dist'),
+    corsOrigins: env('CORS_ORIGINS')?.split(',').map((o) => o.trim()).filter(Boolean),
   });
 
   const port = Number(env('PORT') ?? 8080);

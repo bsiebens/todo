@@ -5,6 +5,8 @@ import { useActions } from './actions';
 import { Icon } from './Icon';
 import { presetName } from './Tuning';
 import type { View } from './views';
+import { isDesktop } from '../platform/desktop';
+import { DesktopSettings } from './DesktopSettings';
 import { SyncSettings } from './SyncSettings';
 import { ThemeSwitch } from './ThemeSwitch';
 import { currentContext, useNow, useSnapshot, useStore } from './state';
@@ -29,6 +31,13 @@ export function SettingsView({ initialCode, onNavigate, onImport }: { initialCod
       <div className="viewhead"><h1>Settings</h1></div>
 
       <SyncSettings initialCode={initialCode} />
+
+      {isDesktop && (
+        <>
+          <h2>Desktop app</h2>
+          <DesktopSettings />
+        </>
+      )}
 
       <h2>Appearance</h2>
       <div className="card">
@@ -93,7 +102,7 @@ export function SettingsView({ initialCode, onNavigate, onImport }: { initialCod
       <h2>Data</h2>
       <div className="card">
       <p className="small muted" style={{ marginTop: 0 }}>
-        Stored on this device ({store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}).
+        Stored on this device ({store.storage === 'file' ? 'a database file in the app data folder' : store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}).
       </p>
       <div className="actions">
         <button className="btn" onClick={onImport}>

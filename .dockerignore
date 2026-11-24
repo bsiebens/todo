@@ -6,3 +6,4 @@ data
 backups
 .env
 .dev-data
+src-tauri

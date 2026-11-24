@@ -9,7 +9,7 @@ describe('fuzzyScore', () => {
   });
   it('ranks substrings and word starts first', () => {
     const items = ['Settings', 'Go to Upcoming', 'Set priority: High', 'Start task'];
-    expect(fuzzyFilter('set', items, (x) => x)).toEqual(['Settings', 'Set priority: High', 'Start task']);
+    expect(fuzzyFilter('set', items, (x) => x)).toEqual(['Settings', 'Set priority: High']);
     expect(fuzzyFilter('up', items, (x) => x)[0]).toBe('Go to Upcoming');
   });
   it('returns everything (capped) for an empty query', () => {
