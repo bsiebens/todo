@@ -120,3 +120,26 @@ describe('sync outbox', () => {
     expect((await store.pendingOps()).some((p) => p.op.value === '"New remote"')).toBe(false);
   });
 });
+
+describe('Store.importTasks', () => {
+  it('creates projects, tags, notes and done tasks in one go', async () => {
+    const existing = await store.createProject('Work');
+    const { detectAndParse } = await import('../domain/importers');
+    const r = detectAndParse([{ name: 'list', text: '# work/Admin\n- [ ] Pay invoice #finance\n- [x] File taxes #finance\nCall mum @Home every week' }], '2026-11-24');
+    r.items[0]!.notes.push('Ask for the PO number');
+    expect(await store.importTasks(r.items, 'a text list')).toBe(3);
+    const s = store.snapshot;
+    const tree = store.tree();
+    expect(s.projects.map((p) => tree.path(p.id, '/')).sort()).toEqual(['Home', 'Work', 'Work/Admin']);
+    expect(s.projects.find((p) => p.name === 'Admin')!.parentId).toBe(existing);
+    expect(s.tags.map((t) => t.name)).toEqual(['finance']);
+    const byTitle = (t: string) => s.tasks.find((x) => x.title === t)!;
+    expect(byTitle('File taxes')).toMatchObject({ status: 'done' });
+    expect(byTitle('File taxes').completedAt).not.toBeNull();
+    expect(byTitle('Call mum').seriesId).not.toBeNull();
+    const notes = s.notes.filter((n) => n.taskId === byTitle('Pay invoice').id).map((n) => [n.kind, n.body]);
+    expect(notes).toContainEqual(['system', 'Imported from a text list']);
+    expect(notes).toContainEqual(['user', 'Ask for the PO number']);
+    expect(await store.pendingCount()).toBeGreaterThan(0);
+  });
+});

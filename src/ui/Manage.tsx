@@ -1,51 +1,29 @@
 import { useMemo, useState } from 'react';
 import type { Context } from '../domain/types';
-import { DEFAULT_WEIGHTS, PRESETS, type UrgencyWeights } from '../domain/urgency';
-import { isOpen } from '../domain/types';
+import type { Store } from '../db/store';
 import { useActions } from './actions';
+import { Icon } from './Icon';
+import { presetName } from './Tuning';
+import type { View } from './views';
 import { isDesktop } from '../platform/desktop';
 import { DesktopSettings } from './DesktopSettings';
 import { SyncSettings } from './SyncSettings';
 import { ThemeSwitch } from './ThemeSwitch';
-import { byUrgency, computeDerived, currentContext, useNow, useSnapshot, useStore } from './state';
+import { currentContext, useNow, useSnapshot, useStore } from './state';
 
-const WEIGHT_FIELDS: { key: keyof UrgencyWeights; label: string; min: number; max: number; step: number }[] = [
-  { key: 'due', label: 'Due soon', min: 0, max: 30, step: 0.5 },
-  { key: 'dueHalfLifeDays', label: 'Due curve (days)', min: 0.5, max: 14, step: 0.5 },
-  { key: 'priority', label: 'Priority', min: 0, max: 20, step: 0.5 },
-  { key: 'inProgress', label: 'In progress', min: 0, max: 20, step: 0.5 },
-  { key: 'blocking', label: 'Blocking others', min: 0, max: 20, step: 0.5 },
-  { key: 'blocked', label: 'Blocked', min: -30, max: 0, step: 0.5 },
-  { key: 'focus', label: 'Focus flag', min: 0, max: 40, step: 1 },
-  { key: 'notStartable', label: 'Not yet startable', min: -40, max: 0, step: 1 },
-  { key: 'context', label: 'Context match', min: 0, max: 10, step: 0.5 },
-  { key: 'age', label: 'Age', min: 0, max: 10, step: 0.5 },
-  { key: 'quickWin', label: 'Quick win', min: 0, max: 10, step: 0.5 },
-  { key: 'recentActivity', label: 'Recent activity', min: 0, max: 10, step: 0.5 },
-  { key: 'bandNow', label: 'Band edge: Now', min: 0, max: 40, step: 0.5 },
-  { key: 'bandSoon', label: 'Band edge: Soon', min: 0, max: 40, step: 0.5 },
-];
+export function downloadExport(store: Store) {
+  const blob = new Blob([store.exportJson()], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `todo-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 
-export function SettingsView({ initialCode }: { initialCode?: string | null }) {
+export function SettingsView({ initialCode, onNavigate, onImport }: { initialCode?: string | null; onNavigate: (v: View) => void; onImport: () => void }) {
   const store = useStore();
   const s = useSnapshot();
   const now = useNow();
-  const [draft, setDraft] = useState<UrgencyWeights>(s.settings.weights);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(s.settings.weights);
-
-  const preview = useMemo(() => {
-    const d = computeDerived(s, now, draft);
-    return s.tasks.filter(isOpen).sort(byUrgency(d)).slice(0, 10).map((t) => ({ t, u: d.urgency.get(t.id)! }));
-  }, [s, now, draft]);
-
-  const download = () => {
-    const blob = new Blob([store.exportJson()], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `todo-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
 
   const st = s.settings;
   return (
@@ -108,52 +86,33 @@ export function SettingsView({ initialCode }: { initialCode?: string | null }) {
       </div>
       </div>
 
-      <h2>Urgency weights</h2>
+      <h2>Urgency</h2>
       <div className="card">
-      <div className="actions">
-        {Object.entries(PRESETS).map(([name, p]) => (
-          <button key={name} className="btn" onClick={() => setDraft({ ...DEFAULT_WEIGHTS, ...p })}>{name}</button>
-        ))}
+        <div className="setting-row">
+          <div>
+            <div>Ranking: {presetName(s.settings.weights) ?? 'Custom weights'}</div>
+            <div className="small muted">Choose a preset or tune each factor, with a live preview of your list.</div>
+          </div>
+          <button className="btn" onClick={() => onNavigate({ kind: 'urgency' })}>
+            <Icon name="sliders" size={16} /> Tune
+          </button>
+        </div>
       </div>
-      <div className="weights">
-        {WEIGHT_FIELDS.map((f) => (
-          <WeightRow key={f.key} f={f} value={draft[f.key]} onChange={(v) => setDraft({ ...draft, [f.key]: v })} />
-        ))}
-      </div>
-      <div className="actions">
-        <button className="btn primary" disabled={!dirty} onClick={() => store.saveSettings({ weights: draft })}>Save weights</button>
-        <button className="btn" disabled={!dirty} onClick={() => setDraft(s.settings.weights)}>Undo changes</button>
-      </div>
-      </div>
-      <h2>Preview: your top 10</h2>
-      <ol className="card preview">
-        {preview.map(({ t, u }) => (
-          <li key={t.id}>
-            <span className={`urg ${u.band}`}>{u.score.toFixed(1)}</span> {t.title}
-          </li>
-        ))}
-        {preview.length === 0 && <li className="muted">Add some tasks to see the ranking.</li>}
-      </ol>
 
       <h2>Data</h2>
       <div className="card">
       <p className="small muted" style={{ marginTop: 0 }}>
         Stored on this device ({store.storage === 'file' ? 'a database file in the app data folder' : store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}).
       </p>
-      <button className="btn" onClick={download}>Export everything as JSON</button>
+      <div className="actions">
+        <button className="btn" onClick={onImport}>
+          <Icon name="upload" size={16} /> Import from another app
+        </button>
+        <button className="btn" onClick={() => downloadExport(store)}>Export everything as JSON</button>
+      </div>
+      <p className="small muted">Import reads Todoist and TickTick CSV exports, Outlook and other CSV task lists, plain text lists and ToDo JSON exports.</p>
       </div>
     </div>
-  );
-}
-
-function WeightRow({ f, value, onChange }: { f: (typeof WEIGHT_FIELDS)[number]; value: number; onChange: (v: number) => void }) {
-  const id = `w-${f.key}`;
-  return (
-    <>
-      <label htmlFor={id}>{f.label}</label>
-      <input id={id} type="range" min={f.min} max={f.max} step={f.step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-      <output htmlFor={id}>{value}</output>
-    </>
   );
 }
 

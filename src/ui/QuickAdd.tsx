@@ -11,7 +11,7 @@ interface Props {
   autoFocus?: boolean;
 }
 
-const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K';
+export const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K';
 
 /** One line, parsed into chips as you type. Enter saves. */
 export const QuickAdd = forwardRef<HTMLInputElement, Props>(function QuickAdd({ defaultProjectId, onCreated, autoFocus }, ref) {

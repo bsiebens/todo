@@ -1,4 +1,5 @@
 import { isOpen } from '../domain/types';
+import { PALETTE_SHORTCUT } from './CommandPalette';
 import { Icon, type IconName } from './Icon';
 import { useDerived, useSnapshot, useSyncStatus } from './state';
 import { ago } from './SyncSettings';
@@ -10,9 +11,10 @@ interface Props {
   onNavigate: (v: View) => void;
   open: boolean;
   onClose: () => void;
+  onPalette: () => void;
 }
 
-export function Sidebar({ view, onNavigate, open, onClose }: Props) {
+export function Sidebar({ view, onNavigate, open, onClose, onPalette }: Props) {
   const s = useSnapshot();
   const d = useDerived();
   const active = viewKey(view);
@@ -49,6 +51,15 @@ export function Sidebar({ view, onNavigate, open, onClose }: Props) {
         {item({ kind: 'inbox' }, 'Inbox', 'inbox', openTasks.filter((t) => !t.projectId).length)}
         {item({ kind: 'logbook' }, 'Logbook', 'logbook')}
         {item({ kind: 'analytics' }, 'Analytics', 'chart')}
+        {item({ kind: 'urgency' }, 'Urgency tuning', 'sliders')}
+        {s.settings.savedFilters.length > 0 && (
+          <>
+            <div className="navhead">
+              <span>Filters</span>
+            </div>
+            {s.settings.savedFilters.map((f) => item({ kind: 'filter', id: f.id }, f.name, 'filter'))}
+          </>
+        )}
         <div className="navhead">
           <span>Projects</span>
           <button className="linkbtn" onClick={() => onNavigate({ kind: 'projects' })}>Manage</button>
@@ -63,6 +74,11 @@ export function Sidebar({ view, onNavigate, open, onClose }: Props) {
         {s.tags.length === 0 && <div className="navhint">Type #name in quick add to tag a task.</div>}
       </div>
       <div className="sidefoot">
+        <button className="nav desktop-only" onClick={onPalette} title="Command palette">
+          <Icon name="command" size={17} />
+          <span className="label">Commands</span>
+          <kbd className="navkbd">{PALETTE_SHORTCUT}</kbd>
+        </button>
         {item({ kind: 'search', q: '' }, 'Search', 'search')}
         {item({ kind: 'settings' }, 'Settings', 'settings')}
         <button className="syncline nav" onClick={() => onNavigate({ kind: 'settings' })} title="Sync status">

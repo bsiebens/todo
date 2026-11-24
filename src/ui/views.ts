@@ -10,6 +10,8 @@ export type View =
   | { kind: 'project'; id: Id }
   | { kind: 'tag'; id: Id }
   | { kind: 'search'; q: string }
+  | { kind: 'filter'; id: Id }
+  | { kind: 'urgency' }
   | { kind: 'logbook' }
   | { kind: 'analytics' }
   | { kind: 'projects' }
@@ -81,6 +83,11 @@ export function selectView(view: View, s: Snapshot, d: Derived, opts: { showHidd
     }
     case 'search':
       return { title: 'Search', sections: [{ title: null, tasks: search(view.q, s, d).sort(sortU) }] };
+    case 'filter': {
+      const f = s.settings.savedFilters.find((x) => x.id === view.id);
+      if (!f) return { title: 'Filter not found', sections: [] };
+      return { title: f.name, sections: [{ title: null, tasks: search(f.query, s, d).sort(sortU) }] };
+    }
     case 'logbook': {
       const closed = s.tasks
         .filter((t) => !isOpen(t))
