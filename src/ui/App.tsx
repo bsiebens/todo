@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isOpen, type Id } from '../domain/types';
 import { useActions } from './actions';
 import { AnalyticsView } from './Analytics';
+import { ContextSwitch } from './ContextSwitch';
 import { Icon } from './Icon';
 import { ProjectsView, SettingsView, TagsView } from './Manage';
 import { QuickAdd } from './QuickAdd';
@@ -107,17 +108,7 @@ export function App() {
   const showDetail = isList && !!selected;
   const ctx = d.context;
 
-  const ctxButton = (cls: string) => (
-    <button
-      className={`ctx ${cls}`}
-      title="Current context. Click to switch."
-      onClick={() => store.saveSettings({ contextMode: s.settings.contextMode === 'auto' ? (ctx === 'office' ? 'home' : 'office') : 'auto' })}
-    >
-      <Icon name={ctx === 'office' ? 'office' : 'home'} size={15} />
-      {ctx === 'office' ? 'Office' : 'Home'}
-      {s.settings.contextMode === 'auto' ? '' : <span className="fixed">fixed</span>}
-    </button>
-  );
+  const ctxButton = (cls: string) => <ContextSwitch className={cls} onOpenSettings={() => navigate({ kind: 'settings' })} />;
 
   return (
     <div className={`app ${showDetail ? 'hasdetail' : 'nodetail'}`}>

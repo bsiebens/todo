@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { formatDue, toDateStr } from '../domain/dates';
-import { isOpen, type Id, type Task } from '../domain/types';
+import { isOpen, PRIORITY_LABELS, type Id, type Task } from '../domain/types';
 import { useActions } from './actions';
 import { Icon } from './Icon';
 import { useDerived } from './state';
@@ -64,6 +64,7 @@ function Row({ task, selected, onSelect, showProject }: { task: Task; selected: 
   const meta: React.ReactNode[] = [];
   if (!isOpen(task) && task.completedAt) meta.push(<span key="st" className="badge">{task.status === 'cancelled' ? 'Cancelled' : 'Done'}</span>);
   if (task.status === 'in_progress') meta.push(<span key="st" className="badge accent"><Icon name="play" size={10} />Started</span>);
+  if (task.priority > 0 && isOpen(task)) meta.push(<span key="pr" className={`prio p${task.priority}`}><Icon name="flag" size={12} />{PRIORITY_LABELS[task.priority]}</span>);
   if (blocked) meta.push(<span key="bl" className="meta warn"><Icon name="lock" size={13} />Blocked by {d.graph.openBlockers(task.id, d.tasks).map((b) => b.title).join(', ')}</span>);
   if (task.dueDate) meta.push(<span key="due" className={`meta ${overdue ? 'overdue' : dueToday ? 'today' : ''}`}><Icon name="upcoming" size={13} />{formatDue(task.dueDate, task.dueTime, today)}</span>);
   if (showProject && task.projectId) meta.push(<span key="pr" className="meta"><Icon name="folder" size={13} />{d.tree.path(task.projectId)}</span>);
@@ -106,7 +107,7 @@ function Row({ task, selected, onSelect, showProject }: { task: Task; selected: 
   return (
     <div
       ref={ref}
-      className={`row ${selected ? 'selected' : ''} ${isOpen(task) ? '' : 'closed'}`}
+      className={`row pr${isOpen(task) ? task.priority : 0} ${selected ? 'selected' : ''} ${isOpen(task) ? '' : 'closed'}`}
       onClick={() => onSelect(task.id)}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
