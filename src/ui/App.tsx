@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isOpen, type Id } from '../domain/types';
 import { useActions } from './actions';
+import { AnalyticsView } from './Analytics';
 import { Icon } from './Icon';
 import { ProjectsView, SettingsView, TagsView } from './Manage';
 import { QuickAdd } from './QuickAdd';
@@ -28,7 +29,7 @@ export function App() {
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  const isList = !['projects', 'tags', 'settings'].includes(view.kind);
+  const isList = !['projects', 'tags', 'settings', 'analytics'].includes(view.kind);
   const result = useMemo(() => (isList ? selectView(view, s, d, { showHidden, includeSub }) : null), [view, s, d, showHidden, includeSub, isList]);
   const flat = useMemo(() => result?.sections.flatMap((x) => x.tasks) ?? [], [result]);
 
@@ -144,6 +145,7 @@ export function App() {
           <main className="list">
             <div className="list-inner">
               {view.kind === 'settings' && <SettingsView />}
+              {view.kind === 'analytics' && <AnalyticsView onNavigate={navigate} />}
               {view.kind === 'projects' && <ProjectsView onOpen={(id) => navigate({ kind: 'project', id })} />}
               {view.kind === 'tags' && <TagsView onOpen={(id) => navigate({ kind: 'tag', id })} />}
               {result && (
@@ -212,7 +214,7 @@ export function App() {
         {([
           ['Focus', 'focus', view.kind === 'focus', () => navigate({ kind: 'focus' })],
           ['Upcoming', 'upcoming', view.kind === 'upcoming', () => navigate({ kind: 'upcoming' })],
-          ['Browse', 'grid', ['project', 'inbox', 'tag', 'projects', 'tags', 'logbook', 'settings'].includes(view.kind), () => setDrawer(true)],
+          ['Browse', 'grid', ['project', 'inbox', 'tag', 'projects', 'tags', 'logbook', 'analytics', 'settings'].includes(view.kind), () => setDrawer(true)],
           ['Search', 'search', view.kind === 'search', () => navigate({ kind: 'search', q: '' })],
         ] as const).map(([label, icon, on, go]) => (
           <button key={label} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined} onClick={go}>
