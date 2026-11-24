@@ -4,6 +4,7 @@ import { ProjectTree } from '../domain/projects';
 import { isOpen, type Context, type Id, type Note, type Tag, type Task } from '../domain/types';
 import { computeUrgency, type Urgency } from '../domain/urgency';
 import type { Settings, Snapshot, Store } from '../db/store';
+import type { SyncClient, SyncStatus } from '../sync/client';
 
 export const StoreContext = createContext<Store | null>(null);
 
@@ -99,3 +100,19 @@ export function useDerived(): Derived {
 }
 
 export const byUrgency = (d: Derived) => (a: Task, b: Task) => (d.urgency.get(b.id)?.score ?? 0) - (d.urgency.get(a.id)?.score ?? 0);
+
+export const SyncContext = createContext<SyncClient | null>(null);
+
+export function useSync(): SyncClient {
+  const s = useContext(SyncContext);
+  if (!s) throw new Error('Sync not ready');
+  return s;
+}
+
+export function useSyncStatus(): SyncStatus {
+  const sync = useSync();
+  return useSyncExternalStore(
+    (fn) => sync.subscribe(fn),
+    () => sync.status,
+  );
+}

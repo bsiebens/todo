@@ -20,12 +20,16 @@ export default defineConfig({
         icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }],
       },
       workbox: {
+        importScripts: ['push-sw.js'],
+        navigateFallbackDenylist: [/^\/api\//],
         globPatterns: ['**/*.{js,css,html,svg,wasm}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
     }),
   ],
+  // `npm run dev` talks to a sync server started with `npm run dev:server`.
+  server: { proxy: { '/api': { target: 'http://localhost:8080', ws: true } } },
   optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
   worker: { format: 'es' },
-  test: { environment: 'node', include: ['src/**/*.test.ts'] },
+  test: { environment: 'node', include: ['src/**/*.test.ts', 'server/**/*.test.ts'] },
 });

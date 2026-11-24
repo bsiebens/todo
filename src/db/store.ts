@@ -8,6 +8,8 @@ import type { Context, Dependency, Id, Note, Priority, Project, RecurrenceMode, 
 import { DEFAULT_WEIGHTS, type UrgencyWeights } from '../domain/urgency';
 import type { Row, SqlDriver, Statement } from './driver';
 import { migrate } from './migrate';
+import { Hlc } from '../sync/hlc';
+import { APPLY_ORDER, DEFAULT_REMINDERS, ENTITIES, splitSetId, type Op, type ReminderSettings } from '../sync/protocol';
 
 export interface Settings {
   weights: UrgencyWeights;
@@ -16,6 +18,7 @@ export interface Settings {
   officeDays: number[]; // 1 = Monday ... 5 = Friday
   officeStart: string; // HH:MM
   officeEnd: string;
+  reminders: ReminderSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -24,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   officeDays: [1, 2, 3, 4, 5],
   officeStart: '08:30',
   officeEnd: '17:30',
+  reminders: DEFAULT_REMINDERS,
 };
 
 export interface Snapshot {
@@ -64,12 +68,17 @@ export class Store {
   private listeners = new Set<() => void>();
   snapshot: Snapshot = { tasks: [], notes: [], projects: [], tags: [], taskTags: [], deps: [], series: [], settings: DEFAULT_SETTINGS };
 
-  private constructor(private db: SqlDriver) {}
+  private constructor(
+    private db: SqlDriver,
+    private clock: Hlc,
+  ) {}
 
   static async open(db: SqlDriver): Promise<Store> {
     await migrate(db);
-    const s = new Store(db);
-    await s.reload();
+    const state = await db.query("SELECT key, value FROM sync_state WHERE key IN ('node', 'hlc')");
+    const get = (k: string) => state.find((r) => r.key === k)?.value as string | undefined;
+    const s = new Store(db, new Hlc(get('node')!, get('hlc')));
+    await s.write([]); // stamps changes queued by a migration
     return s;
   }
 
@@ -104,19 +113,158 @@ export class Store {
       taskTags: taskTags.map((r) => ({ taskId: r.task_id as Id, tagId: r.tag_id as Id })),
       deps: deps.map((r) => ({ blockerId: r.blocker_id as Id, blockedId: r.blocked_id as Id })),
       series: series.map((r) => fromRow<RecurrenceSeries>(r)),
-      settings: { ...DEFAULT_SETTINGS, ...settingsObj, weights: { ...DEFAULT_WEIGHTS, ...(settingsObj.weights as object) } } as Settings,
+      settings: {
+        ...DEFAULT_SETTINGS,
+        ...settingsObj,
+        weights: { ...DEFAULT_WEIGHTS, ...(settingsObj.weights as object) },
+        reminders: { ...DEFAULT_REMINDERS, ...(settingsObj.reminders as object) },
+      } as Settings,
     };
     for (const fn of this.listeners) fn();
     return this.snapshot;
   }
 
   private async write(statements: Statement[]): Promise<void> {
-    await this.db.batch(statements);
+    await this.db.batch([...statements, ...this.stampStatements()]);
     await this.reload();
   }
 
-  private log(entity: string, id: Id, op: string, data: unknown): Statement {
-    return { sql: 'INSERT INTO change_log (entity, entity_id, op, data, at) VALUES (?,?,?,?,?)', params: [entity, id, op, JSON.stringify(data), nowIso()] };
+  /** Gives the field changes the triggers just queued a clock stamp, in the same transaction. */
+  private stampStatements(): Statement[] {
+    const hlc = this.clock.now();
+    return [
+      // Within one write only the last change to a field counts (setTags removes, then re-adds).
+      {
+        sql: 'DELETE FROM sync_outbox WHERE hlc IS NULL AND seq < (SELECT max(o.seq) FROM sync_outbox o WHERE o.hlc IS NULL AND o.entity = sync_outbox.entity AND o.entity_id = sync_outbox.entity_id AND o.field = sync_outbox.field)',
+      },
+      { sql: 'UPDATE sync_outbox SET hlc = ? WHERE hlc IS NULL', params: [hlc] },
+      {
+        sql: 'INSERT INTO field_clock (entity, entity_id, field, hlc) SELECT entity, entity_id, field, hlc FROM sync_outbox WHERE hlc = ? ON CONFLICT (entity, entity_id, field) DO UPDATE SET hlc = excluded.hlc',
+        params: [hlc],
+      },
+      { sql: "INSERT INTO sync_state (key, value) VALUES ('hlc', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", params: [hlc] },
+    ];
+  }
+
+  // ---------- Sync ----------
+
+  get nodeId(): string {
+    return this.clock.node;
+  }
+
+  /** Local changes not yet sent to the server, oldest first. */
+  async pendingOps(limit = 500): Promise<{ seq: number; op: Op }[]> {
+    const rows = await this.db.query('SELECT seq, entity, entity_id, field, value, hlc FROM sync_outbox WHERE hlc IS NOT NULL ORDER BY seq LIMIT ?', [limit]);
+    return rows.map((r) => ({ seq: r.seq as number, op: { entity: r.entity as Op['entity'], id: r.entity_id as string, field: r.field as string, value: r.value as string, hlc: r.hlc as string } }));
+  }
+
+  async pendingCount(): Promise<number> {
+    const rows = await this.db.query('SELECT count(*) AS n FROM sync_outbox');
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  async ackOps(upToSeq: number): Promise<void> {
+    await this.db.batch([{ sql: 'DELETE FROM sync_outbox WHERE seq <= ?', params: [upToSeq] }]);
+  }
+
+  async getSyncState(key: string): Promise<string | null> {
+    const rows = await this.db.query('SELECT value FROM sync_state WHERE key = ?', [key]);
+    return (rows[0]?.value as string | undefined) ?? null;
+  }
+
+  async setSyncState(key: string, value: string | null): Promise<void> {
+    await this.db.batch([
+      value === null
+        ? { sql: 'DELETE FROM sync_state WHERE key = ?', params: [key] }
+        : { sql: 'INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', params: [key, value] },
+    ]);
+  }
+
+  /** Moves the local clock past a stamp seen elsewhere (for example the server's). */
+  observeClock(hlc: string): void {
+    this.clock.observe(hlc);
+  }
+
+  /**
+   * Applies changes from other devices. Per field, the change with the later clock wins;
+   * older ones are ignored. Returns how many fields changed here.
+   */
+  async applyRemote(ops: Op[]): Promise<number> {
+    if (!ops.length) return 0;
+    for (const op of ops) this.clock.observe(op.hlc);
+    const keys = [...new Set(ops.map((o) => `${o.entity}|${o.id}`))];
+    const clocks = await this.db.query("SELECT entity, entity_id, field, hlc FROM field_clock WHERE entity || '|' || entity_id IN (SELECT value FROM json_each(?))", [JSON.stringify(keys)]);
+    const known = new Map(clocks.map((c) => [`${c.entity}|${c.entity_id}|${c.field}`, c.hlc as string]));
+
+    // Latest winning value per field, grouped by record.
+    const groups = new Map<string, { entity: Op['entity']; id: string; fields: Map<string, Op> }>();
+    for (const op of ops) {
+      const k = `${op.entity}|${op.id}|${op.field}`;
+      const cur = known.get(k);
+      if (cur !== undefined && cur >= op.hlc) continue;
+      known.set(k, op.hlc);
+      const gk = `${op.entity}|${op.id}`;
+      if (!groups.has(gk)) groups.set(gk, { entity: op.entity, id: op.id, fields: new Map() });
+      groups.get(gk)!.fields.set(op.field, op);
+    }
+    if (!groups.size) return 0;
+
+    const st: Statement[] = [{ sql: 'UPDATE sync_flag SET applying = 1' }];
+    let changed = 0;
+    const ordered = [...groups.values()].sort((a, b) => APPLY_ORDER.indexOf(a.entity) - APPLY_ORDER.indexOf(b.entity));
+    const rowIds = new Map<string, Set<string>>();
+    for (const entity of new Set(ordered.map((g) => g.entity))) {
+      const ent = ENTITIES[entity];
+      if (ent.kind !== 'row') continue;
+      const ids = ordered.filter((g) => g.entity === entity).map((g) => g.id);
+      const rows = await this.db.query(`SELECT id FROM ${ent.table} WHERE id IN (SELECT value FROM json_each(?))`, [JSON.stringify(ids)]);
+      rowIds.set(entity, new Set(rows.map((r) => r.id as string)));
+    }
+
+    for (const g of ordered) {
+      const ent = ENTITIES[g.entity];
+      const values = new Map([...g.fields].map(([f, op]) => [f, JSON.parse(op.value) as unknown]));
+      changed += values.size;
+      if (ent.kind === 'row') {
+        const fields = [...values.keys()].filter((f) => f in ent.fields);
+        if (!fields.length) continue;
+        if (rowIds.get(g.entity)!.has(g.id)) {
+          st.push({ sql: `UPDATE ${ent.table} SET ${fields.map((f) => `${f} = ?`).join(', ')} WHERE id = ?`, params: [...fields.map((f) => values.get(f)), g.id] });
+        } else {
+          const row: Record<string, unknown> = { ...ent.defaults };
+          for (const f of fields) row[f] = values.get(f);
+          const cols = ['id', ...Object.keys(row)];
+          st.push({ sql: `INSERT INTO ${ent.table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, params: [g.id, ...Object.values(row)] });
+          rowIds.get(g.entity)!.add(g.id);
+        }
+      } else if (ent.kind === 'set') {
+        const pair = splitSetId(g.id);
+        if (!pair || !values.has('present')) continue;
+        const [a, b] = ent.columns;
+        if (values.get('present')) {
+          st.push(
+            g.entity === 'dependency'
+              ? { sql: `INSERT OR IGNORE INTO ${ent.table} (${a}, ${b}, created_at) VALUES (?, ?, ?)`, params: [...pair, nowIso()] }
+              : { sql: `INSERT OR IGNORE INTO ${ent.table} (${a}, ${b}) VALUES (?, ?)`, params: pair },
+          );
+        } else {
+          st.push({ sql: `DELETE FROM ${ent.table} WHERE ${a} = ? AND ${b} = ?`, params: pair });
+        }
+      } else if (values.has('value')) {
+        st.push({ sql: 'INSERT INTO setting (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', params: [g.id, values.get('value')] });
+      }
+      for (const op of g.fields.values()) {
+        st.push({
+          sql: 'INSERT INTO field_clock (entity, entity_id, field, hlc) VALUES (?,?,?,?) ON CONFLICT (entity, entity_id, field) DO UPDATE SET hlc = excluded.hlc',
+          params: [op.entity, op.id, op.field, op.hlc],
+        });
+      }
+    }
+    st.push({ sql: 'UPDATE sync_flag SET applying = 0' });
+    st.push({ sql: "INSERT INTO sync_state (key, value) VALUES ('hlc', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", params: [this.clock.last] });
+    await this.db.batch(st);
+    await this.reload();
+    return changed;
   }
 
   private systemNote(taskId: Id, body: string, at = nowIso()): Statement {
@@ -179,7 +327,6 @@ export class Store {
     const cols = Object.keys(row);
     st.push({ sql: `INSERT INTO task (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, params: Object.values(row) });
     st.push(this.systemNote(id, 'Created', now));
-    st.push(this.log('task', id, 'create', row));
     st.push(...this.tagStatements(id, input.tagNames ?? []));
     await this.write(st);
     return id;
@@ -218,7 +365,6 @@ export class Store {
       const tree = this.tree();
       st.push(this.systemNote(id, `Moved to ${patch.projectId ? tree.path(patch.projectId) : 'Inbox'}`));
     }
-    st.push(this.log('task', id, 'update', Object.fromEntries(entries)));
     await this.write(st);
   }
 
@@ -226,7 +372,6 @@ export class Store {
     await this.write([
       { sql: 'DELETE FROM task_tag WHERE task_id = ?', params: [taskId] },
       ...this.tagStatements(taskId, names),
-      this.log('task', taskId, 'tags', names),
     ]);
   }
 
@@ -235,7 +380,6 @@ export class Store {
     await this.write([
       { sql: 'UPDATE task SET deleted_at = ?, updated_at = ? WHERE id = ?', params: [now, now, id] },
       { sql: 'DELETE FROM dependency WHERE blocker_id = ? OR blocked_id = ?', params: [id, id] },
-      this.log('task', id, 'delete', {}),
     ]);
   }
 
@@ -269,7 +413,6 @@ export class Store {
     if ((t.status === 'done' || t.status === 'cancelled') && to === 'todo') label = 'Reopened';
     if (to === 'in_progress') label = 'Started';
     st.push(this.systemNote(id, overrideReason ? `${label} despite blockers (override): ${overrideReason.trim()}` : label, now));
-    st.push(this.log('task', id, 'status', fields));
 
     let nextId: Id | undefined;
     const series = t.seriesId ? this.snapshot.series.find((s) => s.id === t.seriesId) : undefined;
@@ -295,7 +438,6 @@ export class Store {
         st.push({ sql: `INSERT INTO task (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, params: Object.values(row) });
         st.push({ sql: 'INSERT INTO task_tag (task_id, tag_id) SELECT ?, tag_id FROM task_tag WHERE task_id = ?', params: [nextId, id] });
         st.push(this.systemNote(nextId, `Created from recurring series, previous one ${to === 'done' ? 'completed' : 'skipped'}`, now));
-        st.push(this.log('task', nextId, 'create', row));
       }
     }
     await this.write(st);
@@ -310,14 +452,12 @@ export class Store {
       await this.write([
         { sql: 'UPDATE task SET series_id = NULL, updated_at = ? WHERE id = ?', params: [now, taskId] },
         this.systemNote(taskId, 'No longer repeats'),
-        this.log('task', taskId, 'update', { seriesId: null }),
       ]);
       return;
     }
     if (t.seriesId) {
       await this.write([
         { sql: 'UPDATE recurrence_series SET rrule = ?, mode = ?, updated_at = ? WHERE id = ?', params: [rec.rule, rec.mode, now, t.seriesId] },
-        this.log('series', t.seriesId, 'update', rec),
       ]);
       return;
     }
@@ -325,7 +465,6 @@ export class Store {
     await this.write([
       { sql: 'INSERT INTO recurrence_series (id, rrule, mode, updated_at) VALUES (?,?,?,?)', params: [sid, rec.rule, rec.mode, now] },
       { sql: 'UPDATE task SET series_id = ?, due_date = COALESCE(due_date, ?), updated_at = ? WHERE id = ?', params: [sid, toDateStr(new Date()), now, taskId] },
-      this.log('series', sid, 'create', rec),
     ]);
   }
 
@@ -337,14 +476,12 @@ export class Store {
     const now = nowIso();
     await this.write([
       { sql: 'INSERT INTO note (id, task_id, body, kind, created_at) VALUES (?,?,?,?,?)', params: [id, taskId, body.trim(), 'user', now] },
-      this.log('note', id, 'create', { taskId, body }),
     ]);
   }
 
   async editNote(id: Id, body: string): Promise<void> {
     await this.write([
       { sql: "UPDATE note SET body = ?, edited_at = ? WHERE id = ? AND kind = 'user'", params: [body, nowIso(), id] },
-      this.log('note', id, 'update', { body }),
     ]);
   }
 
@@ -362,7 +499,6 @@ export class Store {
     await this.write([
       { sql: 'INSERT OR IGNORE INTO dependency (blocker_id, blocked_id, created_at) VALUES (?,?,?)', params: [blockerId, blockedId, nowIso()] },
       this.systemNote(blockedId, `Blocked by: ${tasks.get(blockerId)?.title ?? '?'}`),
-      this.log('dependency', `${blockerId}>${blockedId}`, 'create', { blockerId, blockedId }),
     ]);
   }
 
@@ -371,7 +507,6 @@ export class Store {
     await this.write([
       { sql: 'DELETE FROM dependency WHERE blocker_id = ? AND blocked_id = ?', params: [blockerId, blockedId] },
       this.systemNote(blockedId, `No longer blocked by: ${tasks.get(blockerId)?.title ?? '?'}`),
-      this.log('dependency', `${blockerId}>${blockedId}`, 'delete', {}),
     ]);
   }
 
@@ -383,7 +518,6 @@ export class Store {
     const sortKey = `a${String(siblings).padStart(4, '0')}`;
     await this.write([
       { sql: 'INSERT INTO project (id, parent_id, name, context, sort_key, updated_at) VALUES (?,?,?,?,?,?)', params: [id, parentId, name.trim(), context, sortKey, nowIso()] },
-      this.log('project', id, 'create', { name, parentId, context }),
     ]);
     return id;
   }
@@ -407,7 +541,6 @@ export class Store {
     if (!entries.length) return;
     await this.write([
       { sql: `UPDATE project SET ${entries.map(([k]) => `${snake(k)} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, params: [...entries.map(([, v]) => v), nowIso(), id] },
-      this.log('project', id, 'update', patch),
     ]);
   }
 
@@ -420,7 +553,6 @@ export class Store {
       { sql: 'UPDATE task SET project_id = ?, updated_at = ? WHERE project_id = ?', params: [p.parentId, now, id] },
       { sql: 'UPDATE project SET parent_id = ?, updated_at = ? WHERE parent_id = ?', params: [p.parentId, now, id] },
       { sql: 'UPDATE project SET deleted_at = ?, updated_at = ? WHERE id = ?', params: [now, now, id] },
-      this.log('project', id, 'delete', {}),
     ]);
   }
 
@@ -431,7 +563,6 @@ export class Store {
     if (!entries.length) return;
     await this.write([
       { sql: `UPDATE tag SET ${entries.map(([k]) => `${snake(k)} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, params: [...entries.map(([, v]) => v), nowIso(), id] },
-      this.log('tag', id, 'update', patch),
     ]);
   }
 
@@ -439,7 +570,6 @@ export class Store {
     await this.write([
       { sql: 'DELETE FROM task_tag WHERE tag_id = ?', params: [id] },
       { sql: 'UPDATE tag SET deleted_at = ? WHERE id = ?', params: [nowIso(), id] },
-      this.log('tag', id, 'delete', {}),
     ]);
   }
 

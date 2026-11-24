@@ -5,7 +5,7 @@ import type { Row, SqlDriver, Statement } from './driver';
 export async function createMemoryDriver(): Promise<SqlDriver> {
   const sqlite3 = await sqlite3InitModule();
   const db = new sqlite3.oo1.DB(':memory:', 'c');
-  db.exec('PRAGMA foreign_keys = ON');
+  // Foreign keys stay off: synced records can arrive before the records they point to.
   return {
     storage: 'memory',
     async query(sql, params = []) {

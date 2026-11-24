@@ -3,6 +3,7 @@ import type { Context } from '../domain/types';
 import { DEFAULT_WEIGHTS, PRESETS, type UrgencyWeights } from '../domain/urgency';
 import { isOpen } from '../domain/types';
 import { useActions } from './actions';
+import { SyncSettings } from './SyncSettings';
 import { ThemeSwitch } from './ThemeSwitch';
 import { byUrgency, computeDerived, currentContext, useNow, useSnapshot, useStore } from './state';
 
@@ -23,7 +24,7 @@ const WEIGHT_FIELDS: { key: keyof UrgencyWeights; label: string; min: number; ma
   { key: 'bandSoon', label: 'Band edge: Soon', min: 0, max: 40, step: 0.5 },
 ];
 
-export function SettingsView() {
+export function SettingsView({ initialCode }: { initialCode?: string | null }) {
   const store = useStore();
   const s = useSnapshot();
   const now = useNow();
@@ -48,6 +49,8 @@ export function SettingsView() {
   return (
     <div className="settings">
       <div className="viewhead"><h1>Settings</h1></div>
+
+      <SyncSettings initialCode={initialCode} />
 
       <h2>Appearance</h2>
       <div className="card">
@@ -119,7 +122,7 @@ export function SettingsView() {
       <h2>Data</h2>
       <div className="card">
       <p className="small muted" style={{ marginTop: 0 }}>
-        Stored on this device ({store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}). Sync between devices comes in the next phase.
+        Stored on this device ({store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}).
       </p>
       <button className="btn" onClick={download}>Export everything as JSON</button>
       </div>

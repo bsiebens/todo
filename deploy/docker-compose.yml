@@ -1,0 +1,55 @@
+# ToDo sync server for the home server. See deploy/README.md.
+#   cp .env.example .env   (then edit it)
+#   docker compose up -d --build
+name: todo
+
+services:
+  app:
+    build: ..
+    image: todo:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://todo:${POSTGRES_PASSWORD}@db:5432/todo
+    ports:
+      - "${PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: todo
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d todo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Nightly database dump into ./backups, keeping the newest 14.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          f=/backups/todo-$$(date +%Y-%m-%d).sql.gz
+          pg_dump -h db -U todo todo | gzip > "$$f.tmp" && mv "$$f.tmp" "$$f" && echo "backup written: $$f"
+          ls -1t /backups/todo-*.sql.gz | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
