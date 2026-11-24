@@ -3,6 +3,7 @@ import type { Context } from '../domain/types';
 import { DEFAULT_WEIGHTS, PRESETS, type UrgencyWeights } from '../domain/urgency';
 import { isOpen } from '../domain/types';
 import { useActions } from './actions';
+import { ThemeSwitch } from './ThemeSwitch';
 import { byUrgency, computeDerived, currentContext, useNow, useSnapshot, useStore } from './state';
 
 const WEIGHT_FIELDS: { key: keyof UrgencyWeights; label: string; min: number; max: number; step: number }[] = [
@@ -46,10 +47,21 @@ export function SettingsView() {
   const st = s.settings;
   return (
     <div className="settings">
-      <h1>Settings</h1>
+      <div className="viewhead"><h1>Settings</h1></div>
+
+      <h2>Appearance</h2>
+      <div className="card">
+        <div className="setting-row">
+          <div>
+            <div>Theme</div>
+            <div className="small muted">System follows your device's light or dark setting. Saved on this device only.</div>
+          </div>
+          <ThemeSwitch />
+        </div>
+      </div>
 
       <h2>Home or office</h2>
-      <div className="fields">
+      <div className="card fields">
         <label htmlFor="ctx">Context</label>
         <select id="ctx" value={st.contextMode} onChange={(e) => store.saveSettings({ contextMode: e.target.value as typeof st.contextMode })}>
           <option value="auto">Automatic (office hours below), now: {currentContext(st, now)}</option>
@@ -59,10 +71,9 @@ export function SettingsView() {
         <label>Office days</label>
         <div className="inline">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((n, i) => (
-            <label key={n} className="small" style={{ color: 'var(--text)' }}>
+            <label key={n} className="daychip">
               <input
                 type="checkbox"
-                style={{ minHeight: 0 }}
                 checked={st.officeDays.includes(i + 1)}
                 onChange={(e) => store.saveSettings({ officeDays: e.target.checked ? [...st.officeDays, i + 1].sort() : st.officeDays.filter((x) => x !== i + 1) })}
               />{' '}
@@ -79,6 +90,7 @@ export function SettingsView() {
       </div>
 
       <h2>Urgency weights</h2>
+      <div className="card">
       <div className="actions">
         {Object.entries(PRESETS).map(([name, p]) => (
           <button key={name} className="btn" onClick={() => setDraft({ ...DEFAULT_WEIGHTS, ...p })}>{name}</button>
@@ -93,8 +105,9 @@ export function SettingsView() {
         <button className="btn primary" disabled={!dirty} onClick={() => store.saveSettings({ weights: draft })}>Save weights</button>
         <button className="btn" disabled={!dirty} onClick={() => setDraft(s.settings.weights)}>Undo changes</button>
       </div>
+      </div>
       <h2>Preview: your top 10</h2>
-      <ol className="preview">
+      <ol className="card preview">
         {preview.map(({ t, u }) => (
           <li key={t.id}>
             <span className={`urg ${u.band}`}>{u.score.toFixed(1)}</span> {t.title}
@@ -104,10 +117,12 @@ export function SettingsView() {
       </ol>
 
       <h2>Data</h2>
-      <p className="small muted">
+      <div className="card">
+      <p className="small muted" style={{ marginTop: 0 }}>
         Stored on this device ({store.storage === 'OPFS' ? 'browser private storage, kept offline' : 'memory only: this browser does not allow offline storage, data is lost on reload'}). Sync between devices comes in the next phase.
       </p>
       <button className="btn" onClick={download}>Export everything as JSON</button>
+      </div>
     </div>
   );
 }
@@ -139,8 +154,8 @@ export function ProjectsView({ onOpen }: { onOpen: (id: string) => void }) {
 
   return (
     <div className="settings">
-      <h1>Projects</h1>
-      <div className="inline" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+      <div className="viewhead"><h1>Projects</h1></div>
+      <div className="addrow">
         <input placeholder="New project name" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
         <select aria-label="Parent project" value={parent} onChange={(e) => setParent(e.target.value)}>
           <option value="">Top level</option>
@@ -150,7 +165,7 @@ export function ProjectsView({ onOpen }: { onOpen: (id: string) => void }) {
         </select>
         <button className="btn primary" onClick={add}>Add project</button>
       </div>
-      <div className="tree">
+      <div className="card tree">
         {tree.flatten().map(({ project: p, depth }) => (
           <div className="node" key={p.id} style={{ paddingLeft: depth * 18 }}>
             <input
@@ -205,9 +220,9 @@ export function TagsView({ onOpen }: { onOpen: (id: string) => void }) {
   const s = useSnapshot();
   return (
     <div className="settings">
-      <h1>Tags</h1>
+      <div className="viewhead"><h1>Tags</h1></div>
       <p className="small muted">A tag's weight is added to the urgency of every task that has it, for example -5 for #waiting.</p>
-      <div className="tree">
+      <div className="card tree">
         {s.tags.map((t) => (
           <div className="node" key={t.id}>
             <input className="pname" aria-label="Tag name" defaultValue={t.name} onBlur={(e) => e.target.value.trim() && e.target.value !== t.name && store.updateTag(t.id, { name: e.target.value.trim() })} />

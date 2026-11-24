@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isOpen, type Id } from '../domain/types';
 import { useActions } from './actions';
+import { Icon } from './Icon';
 import { ProjectsView, SettingsView, TagsView } from './Manage';
 import { QuickAdd } from './QuickAdd';
 import { Sidebar } from './Sidebar';
@@ -105,102 +106,127 @@ export function App() {
   const showDetail = isList && !!selected;
   const ctx = d.context;
 
+  const ctxButton = (cls: string) => (
+    <button
+      className={`ctx ${cls}`}
+      title="Current context. Click to switch."
+      onClick={() => store.saveSettings({ contextMode: s.settings.contextMode === 'auto' ? (ctx === 'office' ? 'home' : 'office') : 'auto' })}
+    >
+      <Icon name={ctx === 'office' ? 'office' : 'home'} size={15} />
+      {ctx === 'office' ? 'Office' : 'Home'}
+      {s.settings.contextMode === 'auto' ? '' : <span className="fixed">fixed</span>}
+    </button>
+  );
+
   return (
-    <div className="app">
-      <header className="topbar">
-        <button className="btn menu" aria-label="Open menu" onClick={() => setDrawer(true)}>☰</button>
-        <QuickAdd ref={quickRef} defaultProjectId={defaultProject} onCreated={(id) => !isPhone() && setSelected(id)} />
-        <span className="ctxwrap">
-          <button
-            className="ctx"
-            title="Current context. Click to switch."
-            onClick={() => store.saveSettings({ contextMode: s.settings.contextMode === 'auto' ? (ctx === 'office' ? 'home' : 'office') : 'auto' })}
-          >
-            {ctx === 'office' ? 'Office' : 'Home'}
-            {s.settings.contextMode === 'auto' ? '' : ' (fixed)'}
+    <div className={`app ${showDetail ? 'hasdetail' : 'nodetail'}`}>
+      <Sidebar view={view} onNavigate={navigate} open={drawer} onClose={() => setDrawer(false)} />
+      {drawer && <div className="drawer-bg" onClick={() => setDrawer(false)} />}
+
+      <div className="workspace">
+        <header className="topbar">
+          <button className="iconbtn menu" aria-label="Open menu" onClick={() => setDrawer(true)}>
+            <Icon name="menu" size={20} />
           </button>
-        </span>
-        <button className="btn searchbtn" onClick={() => navigate({ kind: 'search', q: '' })}>Search</button>
-      </header>
+          <QuickAdd ref={quickRef} defaultProjectId={defaultProject} onCreated={(id) => !isPhone() && setSelected(id)} />
+          {ctxButton('')}
+          <button className="iconbtn searchbtn" aria-label="Search" title="Search (/)" onClick={() => navigate({ kind: 'search', q: '' })}>
+            <Icon name="search" size={19} />
+          </button>
+        </header>
 
-      {store.storage !== 'OPFS' && (
-        <div role="alert" style={{ background: 'var(--soon-soft)', padding: '6px 12px', fontSize: 13, borderBottom: '1px solid var(--soon)' }}>
-          Offline storage is not available here (is the app already open in another tab?). Changes in this window are not saved.
-        </div>
-      )}
-      <div className={`main ${showDetail ? 'hasdetail' : 'nodetail'}`}>
-        <Sidebar view={view} onNavigate={navigate} open={drawer} />
-        {drawer && <div className="drawer-bg" onClick={() => setDrawer(false)} />}
-
-        <main className="list">
-          {view.kind === 'settings' && <SettingsView />}
-          {view.kind === 'projects' && <ProjectsView onOpen={(id) => navigate({ kind: 'project', id })} />}
-          {view.kind === 'tags' && <TagsView onOpen={(id) => navigate({ kind: 'tag', id })} />}
-          {result && (
-            <>
-              <h1>
-                {result.title}
-                {view.kind === 'focus' && <span className="small muted" style={{ fontWeight: 400 }}>{ctx === 'office' ? 'at the office' : 'at home'}</span>}
-                {view.kind === 'project' && d.tree.descendantIds(view.id).size > 0 && (
-                  <label className="small muted" style={{ fontWeight: 400 }}>
-                    <input type="checkbox" style={{ minHeight: 0 }} checked={includeSub} onChange={(e) => setIncludeSub(e.target.checked)} /> include sub-projects
-                  </label>
-                )}
-              </h1>
-              {view.kind === 'search' && (
+        {store.storage !== 'OPFS' && (
+          <div role="alert" className="banner">
+            Offline storage is not available here (is the app already open in another tab?). Changes in this window are not saved.
+          </div>
+        )}
+        <div className="main">
+          <main className="list">
+            <div className="list-inner">
+              {view.kind === 'settings' && <SettingsView />}
+              {view.kind === 'projects' && <ProjectsView onOpen={(id) => navigate({ kind: 'project', id })} />}
+              {view.kind === 'tags' && <TagsView onOpen={(id) => navigate({ kind: 'tag', id })} />}
+              {result && (
                 <>
-                  <input
-                    ref={searchRef}
-                    style={{ width: '100%', marginBottom: 6 }}
-                    aria-label="Search"
-                    placeholder="Search: words, #tag, project:Work, due<7d, !high, status:done"
-                    value={view.q}
-                    onChange={(e) => setView({ kind: 'search', q: e.target.value })}
-                  />
-                  {!view.q && <p className="small muted">Filters: #tag · project:Work/Clients · due&lt;7d · due:today · due:overdue · !high · status:done or status:all</p>}
+                  <div className="viewhead">
+                    <h1>{result.title}</h1>
+                    {view.kind === 'focus' && <span className="muted viewsub">{ctx === 'office' ? 'at the office' : 'at home'}</span>}
+                    {view.kind === 'project' && d.tree.descendantIds(view.id).size > 0 && (
+                      <label className="toggle small muted">
+                        <input type="checkbox" checked={includeSub} onChange={(e) => setIncludeSub(e.target.checked)} /> include sub-projects
+                      </label>
+                    )}
+                    {ctxButton('phone-only')}
+                  </div>
+                  {view.kind === 'search' && (
+                    <>
+                      <div className="searchbox">
+                        <Icon name="search" />
+                        <input
+                          ref={searchRef}
+                          type="search"
+                          aria-label="Search"
+                          placeholder="Words, #tag, project:Work, due<7d, !high, status:done"
+                          value={view.q}
+                          onChange={(e) => setView({ kind: 'search', q: e.target.value })}
+                        />
+                      </div>
+                      {!view.q && <p className="small muted hint">Filters: #tag · project:Work/Clients · due&lt;7d · due:today · due:overdue · !high · status:done or status:all</p>}
+                    </>
+                  )}
+                  {(view.kind !== 'search' || view.q) && (
+                    <TaskList
+                      hasAnyTasks={s.tasks.length > 0}
+                      result={result}
+                      selected={selected}
+                      onSelect={setSelected}
+                      showProject={view.kind !== 'project'}
+                      showHidden={showHidden}
+                      onToggleHidden={() => setShowHidden(!showHidden)}
+                    />
+                  )}
+                  {s.tasks.length === 0 && view.kind === 'focus' && (
+                    <div className="empty welcome">
+                      <p><strong>No tasks yet.</strong> Tap + or type in the box at the top, for example:</p>
+                      <code>Submit expense report tomorrow 17:00 !high #finance @Work/Admin</code>
+                    </div>
+                  )}
                 </>
               )}
-              {(view.kind !== 'search' || view.q) && (
-                <TaskList
-                  hasAnyTasks={s.tasks.length > 0}
-                  result={result}
-                  selected={selected}
-                  onSelect={setSelected}
-                  showProject={view.kind !== 'project'}
-                  showHidden={showHidden}
-                  onToggleHidden={() => setShowHidden(!showHidden)}
-                />
-              )}
-              {s.tasks.length === 0 && view.kind === 'focus' && (
-                <div className="empty">
-                  <p>No tasks yet. Tap + or type in the box at the top, for example:</p>
-                  <p><code>Submit expense report tomorrow 17:00 !high #finance @Work/Admin</code></p>
-                </div>
-              )}
-            </>
-          )}
-        </main>
+            </div>
+          </main>
 
-        {showDetail && (
-          <aside className="detail" aria-label="Task detail">
-            <TaskDetail taskId={selected!} onSelect={setSelected} onClose={() => setSelected(null)} noteInputRef={noteRef} titleInputRef={titleRef} />
-          </aside>
-        )}
+          {showDetail && (
+            <aside className="detail" aria-label="Task detail">
+              <TaskDetail taskId={selected!} onSelect={setSelected} onClose={() => setSelected(null)} noteInputRef={noteRef} titleInputRef={titleRef} />
+            </aside>
+          )}
+        </div>
       </div>
 
-      <button className="fab" aria-label="Add task" onClick={() => setSheet(true)}>+</button>
+      <button className="fab" aria-label="Add task" onClick={() => setSheet(true)}>
+        <Icon name="plus" size={26} />
+      </button>
 
       <nav className="tabbar" aria-label="Main">
-        <button className={view.kind === 'focus' ? 'active' : ''} onClick={() => navigate({ kind: 'focus' })}>Focus</button>
-        <button className={view.kind === 'upcoming' ? 'active' : ''} onClick={() => navigate({ kind: 'upcoming' })}>Upcoming</button>
-        <button className={['project', 'inbox', 'tag', 'projects', 'tags', 'logbook', 'settings'].includes(view.kind) ? 'active' : ''} onClick={() => setDrawer(true)}>Browse</button>
-        <button className={view.kind === 'search' ? 'active' : ''} onClick={() => navigate({ kind: 'search', q: '' })}>Search</button>
+        {([
+          ['Focus', 'focus', view.kind === 'focus', () => navigate({ kind: 'focus' })],
+          ['Upcoming', 'upcoming', view.kind === 'upcoming', () => navigate({ kind: 'upcoming' })],
+          ['Browse', 'grid', ['project', 'inbox', 'tag', 'projects', 'tags', 'logbook', 'settings'].includes(view.kind), () => setDrawer(true)],
+          ['Search', 'search', view.kind === 'search', () => navigate({ kind: 'search', q: '' })],
+        ] as const).map(([label, icon, on, go]) => (
+          <button key={label} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined} onClick={go}>
+            <Icon name={icon} size={22} />
+            <span>{label}</span>
+          </button>
+        ))}
       </nav>
 
       {sheet && (
         <div className="sheet-bg" onClick={() => setSheet(false)}>
           <div className="sheet" role="dialog" aria-label="Quick add" onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Quick add</div>
+            <div className="grabber" aria-hidden="true" />
+            <div className="sheet-title">New task</div>
             <QuickAdd autoFocus defaultProjectId={defaultProject} onCreated={() => setSheet(false)} />
             <p className="small muted">Try: tomorrow 17:00 · !high · #tag · @Work/Admin · every month · ~15m</p>
           </div>
