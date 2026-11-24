@@ -22,7 +22,8 @@ async function start() {
   // The desktop app's quick-entry window (Ctrl+Alt+N) is the same page with #quick.
   // It does not open the database: the main window saves for it.
   if (isDesktop && location.hash === '#quick') {
-    document.documentElement.classList.add('quick-window');
+    const os = /Mac/.test(navigator.userAgent) ? 'mac' : /Windows/.test(navigator.userAgent) ? 'win' : 'linux';
+    document.documentElement.classList.add('quick-window', `qw-${os}`);
     root.render(
       <StrictMode>
         <QuickEntry />

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatDue, toDateStr } from '../domain/dates';
 import { parseQuickAdd } from '../domain/quickadd';
-import { QUICK_ENTRY_DONE, QUICK_ENTRY_SAVE, type QuickEntryDone } from '../platform/desktop-core';
+import { QUICK_ENTRY_DONE, QUICK_ENTRY_SAVE, QUICK_THEME, type QuickEntryDone } from '../platform/desktop-core';
 import { Icon } from './Icon';
+import { applyTheme, themePref, type ThemePref } from './theme';
 
 async function tauri() {
   const [{ invoke }, { emitTo, listen }, { getCurrentWindow }] = await Promise.all([
@@ -37,7 +38,14 @@ export function QuickEntry() {
   useEffect(() => {
     const cleanups: (() => void)[] = [];
     let gone = false;
+    // The native backdrop (macOS, Windows) follows the app's theme too.
+    let pref: ThemePref = themePref();
+    const syncTheme = () => {
+      const theme = applyTheme(pref);
+      void api.current?.invoke('quick_window_theme', { dark: theme === 'dark' }).catch(() => {});
+    };
     const reset = async () => {
+      syncTheme();
       setText('');
       setError(null);
       setBusy(false);
@@ -50,6 +58,8 @@ export function QuickEntry() {
       if (gone) return;
       api.current = t;
       cleanups.push(await t.listen('quick-open', reset));
+      // Chosen in the main window (this window doesn't see its storage change right away).
+      cleanups.push(await t.listen<ThemePref>(QUICK_THEME, (e) => ((pref = e.payload), syncTheme())));
       // Clicking another app puts the window away, like Spotlight.
       cleanups.push(
         await t.win.onFocusChanged(({ payload: focused }) => {
