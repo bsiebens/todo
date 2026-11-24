@@ -111,7 +111,7 @@ export function TuningView() {
 
         <section className="card preview-card" aria-label="Preview">
           <div className="preview-head">
-            <h2 className="cardtitle">Preview: your top {Math.min(15, total)}</h2>
+            <h2 className="cardtitle">{total > 1 ? `Preview: your top ${Math.min(15, total)}` : 'Preview'}</h2>
             {dirty && <span className="small muted">compared with your saved weights</span>}
           </div>
           <ol className="preview">
@@ -153,11 +153,13 @@ export function TuningView() {
         </section>
       </div>
 
-      <div className={`savebar ${dirty ? 'show' : ''}`}>
-        <span className="small">{dirty ? 'Unsaved changes. Saving applies them on all your devices.' : 'Saved.'}</span>
-        <button className="btn" disabled={!dirty} onClick={() => setDraft(saved)}>Undo changes</button>
-        <button className="btn primary" disabled={!dirty} onClick={() => store.saveSettings({ weights: draft })}>Save weights</button>
-      </div>
+      {dirty && (
+        <div className="savebar">
+          <span className="small">Unsaved changes. Saving applies them on all your devices.</span>
+          <button className="btn" disabled={!dirty} onClick={() => setDraft(saved)}>Undo changes</button>
+          <button className="btn primary" disabled={!dirty} onClick={() => store.saveSettings({ weights: draft })}>Save weights</button>
+        </div>
+      )}
     </div>
   );
 }

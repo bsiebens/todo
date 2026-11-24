@@ -51,6 +51,7 @@ export function Sidebar({ view, onNavigate, open, onClose, onPalette }: Props) {
         {item({ kind: 'inbox' }, 'Inbox', 'inbox', openTasks.filter((t) => !t.projectId).length)}
         {item({ kind: 'logbook' }, 'Logbook', 'logbook')}
         {item({ kind: 'analytics' }, 'Analytics', 'chart')}
+        {item({ kind: 'urgency' }, 'Urgency tuning', 'sliders')}
         {s.settings.savedFilters.length > 0 && (
           <>
             <div className="navhead">
@@ -79,7 +80,6 @@ export function Sidebar({ view, onNavigate, open, onClose, onPalette }: Props) {
           <kbd className="navkbd">{PALETTE_SHORTCUT}</kbd>
         </button>
         {item({ kind: 'search', q: '' }, 'Search', 'search')}
-        {item({ kind: 'urgency' }, 'Urgency tuning', 'sliders')}
         {item({ kind: 'settings' }, 'Settings', 'settings')}
         <button className="syncline nav" onClick={() => onNavigate({ kind: 'settings' })} title="Sync status">
           <span className={`syncdot s-${sync.state}`} aria-hidden="true" />

@@ -67,7 +67,7 @@ function Row({ task, selected, onSelect, showProject }: { task: Task; selected: 
   if (task.priority > 0 && isOpen(task)) meta.push(<span key="pr" className={`prio p${task.priority}`}><Icon name="flag" size={12} />{PRIORITY_LABELS[task.priority]}</span>);
   if (blocked) meta.push(<span key="bl" className="meta warn"><Icon name="lock" size={13} />Blocked by {d.graph.openBlockers(task.id, d.tasks).map((b) => b.title).join(', ')}</span>);
   if (task.dueDate) meta.push(<span key="due" className={`meta ${overdue ? 'overdue' : dueToday ? 'today' : ''}`}><Icon name="upcoming" size={13} />{formatDue(task.dueDate, task.dueTime, today)}</span>);
-  if (showProject && task.projectId) meta.push(<span key="pr" className="meta"><Icon name="folder" size={13} />{d.tree.path(task.projectId)}</span>);
+  if (showProject && task.projectId) meta.push(<span key="pj" className="meta"><Icon name="folder" size={13} />{d.tree.path(task.projectId)}</span>);
   if (downstream) meta.push(<span key="ds" className="meta"><Icon name="link" size={13} />Blocks {downstream}</span>);
   if (task.seriesId) meta.push(<span key="rp" className="meta"><Icon name="repeat" size={13} />Repeats</span>);
   if (task.estimateMin) meta.push(<span key="es" className="meta"><Icon name="clock" size={13} />{task.estimateMin} min</span>);
