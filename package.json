@@ -14,7 +14,8 @@
     "test": "vitest run",
     "typecheck": "tsc -b && tsc -p server",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build",
+    "version": "node scripts/sync-version.mjs && git add src-tauri/Cargo.toml src-tauri/Cargo.lock"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",

@@ -2,12 +2,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 // Set by the Tauri CLI when it builds the desktop app. The desktop app loads its files
 // from the app bundle, so it needs no service worker or install manifest.
 const desktop = !!process.env.TAURI_ENV_PLATFORM;
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(version) },
   clearScreen: false,
   plugins: [
     react(),

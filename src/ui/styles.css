@@ -739,3 +739,4 @@ textarea.desc { width: 100%; min-height: 96px; resize: vertical; line-height: 1.
 .import-preview p { padding: 0 8px; }
 .import-preview .icon { margin-left: 4px; vertical-align: -2px; }
 .palette-input input:focus { box-shadow: none; }
+.version { margin: 4px 2px 0; }

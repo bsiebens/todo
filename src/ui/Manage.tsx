@@ -112,6 +112,7 @@ export function SettingsView({ initialCode, onNavigate, onImport }: { initialCod
       </div>
       <p className="small muted">Import reads Todoist and TickTick CSV exports, Outlook and other CSV task lists, plain text lists and ToDo JSON exports.</p>
       </div>
+      <p className="small muted version">ToDo {__APP_VERSION__}{isDesktop ? ', desktop app' : ''}</p>
     </div>
   );
 }
