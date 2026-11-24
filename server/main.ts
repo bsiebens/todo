@@ -2,20 +2,14 @@ import { resolve } from 'node:path';
 import nodemailer from 'nodemailer';
 import { createApp, type Mailer } from './app';
 import { Auth, newCode } from './auth';
-import { getKv, migrate, pgDb, setKv } from './db';
+import { getKv, migrate, pgDb, setKv, type Db } from './db';
 import { Notifier, webPushSender } from './notifier';
 import { SyncService } from './sync';
 
 const env = (k: string) => process.env[k]?.trim() || undefined;
 
-async function main() {
-  const databaseUrl = env('DATABASE_URL');
-  const appUrl = env('APP_URL');
-  if (!databaseUrl || !appUrl) {
-    console.error('DATABASE_URL and APP_URL must be set. See deploy/README.md.');
-    process.exit(1);
-  }
-  const db = pgDb(databaseUrl);
+/** Starts the server on a database. Used by the production entry below and by `npm run dev:server`. */
+export async function run(db: Db, appUrl: string): Promise<void> {
   await migrate(db);
 
   let setupCode = env('SETUP_CODE') ?? (await getKv<string>(db, 'setup_code'));
@@ -83,7 +77,15 @@ async function main() {
   process.on('SIGINT', stop);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+if (!process.env.TODO_DEV) {
+  const databaseUrl = env('DATABASE_URL');
+  const appUrl = env('APP_URL');
+  if (!databaseUrl || !appUrl) {
+    console.error('DATABASE_URL and APP_URL must be set. See deploy/README.md.');
+    process.exit(1);
+  }
+  run(pgDb(databaseUrl), appUrl).catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

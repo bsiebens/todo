@@ -7,3 +7,4 @@ dist-server
 deploy/.env
 deploy/data
 deploy/backups
+.dev-data

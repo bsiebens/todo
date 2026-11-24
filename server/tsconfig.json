@@ -14,5 +14,5 @@
     "types": ["node"]
   },
   "include": ["./**/*.ts", "../src/sync/protocol.ts", "../src/sync/hlc.ts", "../src/domain/dependencies.ts"],
-  "exclude": ["./**/*.test.ts", "./testing.ts"]
+  "exclude": ["./**/*.test.ts", "./testing.ts", "./dev.ts"]
 }

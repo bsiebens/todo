@@ -27,8 +27,9 @@ export default defineConfig({
       },
     }),
   ],
-  // `npm run dev` talks to a sync server started with `npm run dev:server`.
+  // `npm run dev` and `npm run preview` talk to a sync server started with `npm run dev:server`.
   server: { proxy: { '/api': { target: 'http://localhost:8080', ws: true } } },
+  preview: { proxy: { '/api': { target: 'http://localhost:8080', ws: true } } },
   optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
   worker: { format: 'es' },
   test: { environment: 'node', include: ['src/**/*.test.ts', 'server/**/*.test.ts'] },
