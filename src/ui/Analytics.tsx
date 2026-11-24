@@ -54,7 +54,7 @@ export function AnalyticsView({ onNavigate }: { onNavigate: (v: View) => void })
   if (s.tasks.length === 0) {
     return (
       <div className="analytics">
-        <h1>Analytics</h1>
+        <div className="viewhead"><h1>Analytics</h1></div>
         <p className="empty">No tasks yet. Statistics appear here once you add and complete some tasks.</p>
       </div>
     );
@@ -62,16 +62,16 @@ export function AnalyticsView({ onNavigate }: { onNavigate: (v: View) => void })
 
   return (
     <div className="analytics">
-      <h1>
-        Analytics
-        <span className="an-range" role="group" aria-label="Period">
+      <div className="viewhead an-head">
+        <h1>Analytics</h1>
+        <span className="segmented an-range" role="group" aria-label="Period">
           {RANGES.map((r) => (
             <button key={r.key} className={r.key === range ? 'on' : ''} aria-pressed={r.key === range} onClick={() => setRange(r.key)}>
               {r.label}
             </button>
           ))}
         </span>
-      </h1>
+      </div>
 
       <section aria-label="Current state">
         <div className="an-tiles">

@@ -6,6 +6,9 @@ import { ActionsProvider } from './ui/actions';
 import { App } from './ui/App';
 import { StoreContext } from './ui/state';
 import './ui/styles.css';
+import { initTheme } from './ui/theme';
+
+initTheme();
 
 const root = createRoot(document.getElementById('root')!);
 
@@ -24,7 +27,7 @@ async function start() {
     );
   } catch (e) {
     root.render(
-      <div style={{ padding: 24 }}>
+      <div className="fatal">
         <h1>Could not start</h1>
         <p>The local database failed to open: {String(e)}</p>
       </div>,

@@ -1,14 +1,17 @@
 import { isOpen } from '../domain/types';
+import { Icon, type IconName } from './Icon';
 import { useDerived, useSnapshot } from './state';
+import { ThemeSwitch } from './ThemeSwitch';
 import { viewKey, type View } from './views';
 
 interface Props {
   view: View;
   onNavigate: (v: View) => void;
   open: boolean;
+  onClose: () => void;
 }
 
-export function Sidebar({ view, onNavigate, open }: Props) {
+export function Sidebar({ view, onNavigate, open, onClose }: Props) {
   const s = useSnapshot();
   const d = useDerived();
   const active = viewKey(view);
@@ -18,34 +21,50 @@ export function Sidebar({ view, onNavigate, open }: Props) {
   const countByTag = new Map<string, number>();
   for (const tt of s.taskTags) if (d.tasks.get(tt.taskId) && isOpen(d.tasks.get(tt.taskId)!)) countByTag.set(tt.tagId, (countByTag.get(tt.tagId) ?? 0) + 1);
 
-  const item = (v: View, label: string, count?: number, indent = 0) => (
-    <button key={viewKey(v)} className={`nav ${active === viewKey(v) ? 'active' : ''}`} style={{ paddingLeft: 10 + indent * 14 }} onClick={() => onNavigate(v)} aria-current={active === viewKey(v) ? 'page' : undefined}>
-      {label}
-      {count ? <span className="count">{count}</span> : null}
-    </button>
-  );
+  const item = (v: View, label: string, icon: IconName, count?: number, indent = 0) => {
+    const on = active === viewKey(v);
+    return (
+      <button key={viewKey(v)} className={`nav ${on ? 'active' : ''}`} style={indent ? { paddingLeft: 10 + indent * 16 } : undefined} onClick={() => onNavigate(v)} aria-current={on ? 'page' : undefined}>
+        <Icon name={icon} size={17} />
+        <span className="label">{label}</span>
+        {count ? <span className="count">{count}</span> : null}
+      </button>
+    );
+  };
 
   return (
     <nav className={`sidebar ${open ? 'open' : ''}`} aria-label="Views">
-      {item({ kind: 'focus' }, 'Focus', openTasks.filter((t) => !d.blocked.has(t.id)).length)}
-      {item({ kind: 'upcoming' }, 'Upcoming')}
-      {item({ kind: 'inbox' }, 'Inbox', openTasks.filter((t) => !t.projectId).length)}
-      {item({ kind: 'logbook' }, 'Logbook')}
-      {item({ kind: 'analytics' }, 'Analytics')}
-      <div className="navhead">
-        Projects
-        <button className="iconbtn small" onClick={() => onNavigate({ kind: 'projects' })}>Manage</button>
+      <div className="brand">
+        <img src="/icon.svg" alt="" width={26} height={26} />
+        <span>ToDo</span>
+        <button className="iconbtn drawer-close" aria-label="Close menu" onClick={onClose}>
+          <Icon name="close" />
+        </button>
       </div>
-      {d.tree.flatten().filter((x) => !x.project.archivedAt).map(({ project, depth }) => item({ kind: 'project', id: project.id }, project.name, countByProject.get(project.id), depth))}
-      {s.projects.length === 0 && <div className="small muted" style={{ padding: '0 10px' }}>Type @Work/Admin in quick add to create one.</div>}
-      <div className="navhead">
-        Tags
-        <button className="iconbtn small" onClick={() => onNavigate({ kind: 'tags' })}>Manage</button>
+      <div className="navscroll">
+        {item({ kind: 'focus' }, 'Focus', 'focus', openTasks.filter((t) => !d.blocked.has(t.id)).length)}
+        {item({ kind: 'upcoming' }, 'Upcoming', 'upcoming')}
+        {item({ kind: 'inbox' }, 'Inbox', 'inbox', openTasks.filter((t) => !t.projectId).length)}
+        {item({ kind: 'logbook' }, 'Logbook', 'logbook')}
+        {item({ kind: 'analytics' }, 'Analytics', 'chart')}
+        <div className="navhead">
+          <span>Projects</span>
+          <button className="linkbtn" onClick={() => onNavigate({ kind: 'projects' })}>Manage</button>
+        </div>
+        {d.tree.flatten().filter((x) => !x.project.archivedAt).map(({ project, depth }) => item({ kind: 'project', id: project.id }, project.name, 'folder', countByProject.get(project.id), depth))}
+        {s.projects.length === 0 && <div className="navhint">Type @Work/Admin in quick add to create one.</div>}
+        <div className="navhead">
+          <span>Tags</span>
+          <button className="linkbtn" onClick={() => onNavigate({ kind: 'tags' })}>Manage</button>
+        </div>
+        {s.tags.map((t) => item({ kind: 'tag', id: t.id }, t.name, 'tag', countByTag.get(t.id)))}
+        {s.tags.length === 0 && <div className="navhint">Type #name in quick add to tag a task.</div>}
       </div>
-      {s.tags.map((t) => item({ kind: 'tag', id: t.id }, `#${t.name}`, countByTag.get(t.id)))}
-      <div className="navhead">App</div>
-      {item({ kind: 'search', q: '' }, 'Search')}
-      {item({ kind: 'settings' }, 'Settings')}
+      <div className="sidefoot">
+        {item({ kind: 'search', q: '' }, 'Search', 'search')}
+        {item({ kind: 'settings' }, 'Settings', 'settings')}
+        <ThemeSwitch compact />
+      </div>
     </nav>
   );
 }

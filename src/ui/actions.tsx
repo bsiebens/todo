@@ -79,7 +79,7 @@ export function ActionsProvider({ children }: { children: ReactNode }) {
             <p className="muted small">Still waiting on: {override.blockers.map((b) => b.title).join(', ')}.</p>
             <p className="small">To {override.to === 'done' ? 'complete' : 'start'} it anyway, give a reason. It is saved as a note on the task.</p>
             <textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for the override" onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) confirmOverride(); }} />
-            <div className="actions" style={{ justifyContent: 'flex-end' }}>
+            <div className="actions end">
               <button className="btn" onClick={() => setOverride(null)}>Cancel</button>
               <button className="btn primary" disabled={!reason.trim()} onClick={confirmOverride}>
                 {override.to === 'done' ? 'Complete anyway' : 'Start anyway'}
@@ -89,7 +89,7 @@ export function ActionsProvider({ children }: { children: ReactNode }) {
         </div>
       )}
       {toast && (
-        <div role="status" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 'calc(84px + env(safe-area-inset-bottom))', background: 'var(--text)', color: 'var(--bg)', padding: '8px 14px', borderRadius: 8, zIndex: 40, maxWidth: '90vw' }}>
+        <div role="status" className="toast">
           {toast}
         </div>
       )}

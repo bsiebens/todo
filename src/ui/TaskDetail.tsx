@@ -5,6 +5,7 @@ import { isOpen, PRIORITY_LABELS, type Id, type Priority, type RecurrenceMode, t
 import { STATUS_LABELS } from '../domain/status';
 import { StoreError } from '../db/store';
 import { useActions } from './actions';
+import { Icon } from './Icon';
 import { useDerived, useSnapshot, useStore } from './state';
 
 interface Props {
@@ -63,7 +64,31 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
 
   return (
     <div>
-      <button className="btn ghost backbtn" onClick={onClose}>‹ Back</button>
+      <div className="detail-top">
+        <button className="btn ghost backbtn" onClick={onClose}>
+          <Icon name="back" size={18} /> Back
+        </button>
+        <span className={`status-pill s-${task.status}`}>
+          {STATUS_LABELS[task.status]}
+          {blocked && ' · blocked'}
+        </span>
+        <button
+          className="iconbtn danger deletebtn"
+          aria-label="Delete task"
+          title="Delete task"
+          onClick={async () => {
+            if (confirm(`Delete "${task.title}"?`)) {
+              await store.deleteTask(task.id);
+              onClose();
+            }
+          }}
+        >
+          <Icon name="trash" size={18} />
+        </button>
+        <button className="iconbtn closebtn" aria-label="Close task" title="Close (Esc)" onClick={onClose}>
+          <Icon name="close" />
+        </button>
+      </div>
       <input
         ref={titleInputRef}
         className="titleinput"
@@ -73,32 +98,31 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
         onBlur={() => title.trim() && title !== task.title && update({ title: title.trim() })}
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
       />
-      <div className="small muted">
-        {STATUS_LABELS[task.status]}
-        {blocked && ' · blocked'}
-      </div>
 
       <div className="actions">
-        {task.status === 'todo' && <button className="btn" onClick={() => changeStatus(task.id, 'in_progress')}>Start</button>}
-        {task.status === 'in_progress' && <button className="btn" onClick={() => changeStatus(task.id, 'todo')}>Pause</button>}
-        {open && <button className="btn primary" onClick={() => changeStatus(task.id, 'done')}>Done</button>}
-        {open && <button className="btn" onClick={() => changeStatus(task.id, 'cancelled')}>{series ? 'Skip' : 'Cancel'}</button>}
+        {open && (
+          <button className="btn primary" onClick={() => changeStatus(task.id, 'done')}>
+            <Icon name="check" size={16} /> Done
+          </button>
+        )}
+        {task.status === 'todo' && (
+          <button className="btn" onClick={() => changeStatus(task.id, 'in_progress')}>
+            <Icon name="play" size={14} /> Start
+          </button>
+        )}
+        {task.status === 'in_progress' && (
+          <button className="btn" onClick={() => changeStatus(task.id, 'todo')}>
+            <Icon name="pause" size={16} /> Pause
+          </button>
+        )}
         {!open && <button className="btn" onClick={() => changeStatus(task.id, 'todo')}>Reopen</button>}
-        <button className={`btn ${task.focus ? 'primary' : ''}`} aria-pressed={task.focus} onClick={() => update({ focus: !task.focus })}>★ Focus</button>
-        <button
-          className="btn danger"
-          onClick={async () => {
-            if (confirm(`Delete "${task.title}"?`)) {
-              await store.deleteTask(task.id);
-              onClose();
-            }
-          }}
-        >
-          Delete
+        <button className={`btn ${task.focus ? 'on' : ''}`} aria-pressed={task.focus} onClick={() => update({ focus: !task.focus })}>
+          <Icon name="star" size={16} filled={task.focus} /> Focus
         </button>
+        {open && <button className="btn" onClick={() => changeStatus(task.id, 'cancelled')}>{series ? 'Skip' : 'Cancel'}</button>}
       </div>
 
-      <div className="fields">
+      <div className="card fields">
         <label htmlFor="f-pri">Priority</label>
         <select id="f-pri" value={task.priority} onChange={(e) => update({ priority: Number(e.target.value) as Priority })}>
           {([0, 1, 2, 3, 4] as Priority[]).map((p) => (
@@ -110,7 +134,7 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
         <div className="inline">
           <input id="f-due" type="date" value={task.dueDate ?? ''} onChange={(e) => update({ dueDate: e.target.value || null, ...(e.target.value ? {} : { dueTime: null }) })} />
           <input type="time" aria-label="Due time" value={task.dueTime ?? ''} disabled={!task.dueDate} onChange={(e) => update({ dueTime: e.target.value || null })} />
-          {task.dueDate && <button className="iconbtn small" onClick={() => update({ dueDate: null, dueTime: null })}>Clear</button>}
+          {task.dueDate && <button className="linkbtn" onClick={() => update({ dueDate: null, dueTime: null })}>Clear</button>}
         </div>
 
         <label htmlFor="f-proj">Project</label>
@@ -163,25 +187,25 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
         </div>
       </div>
 
-      <div className="section">
+      <div className="card section">
         <h3>Blocked by</h3>
         <div className="linklist">
           {blockers.map((b) => (
             <div className="linkitem" key={b.id}>
               <button className="name" onClick={() => onSelect(b.id)}>{b.title}</button>
-              <span className="state">{isOpen(b) ? 'open' : STATUS_LABELS[b.status].toLowerCase()}</span>
-              <button className="iconbtn small" aria-label={`Remove ${b.title}`} onClick={() => store.removeDependency(b.id, task.id)}>✕</button>
+              <span className="state badge">{isOpen(b) ? 'open' : STATUS_LABELS[b.status].toLowerCase()}</span>
+              <button className="iconbtn" aria-label={`Remove ${b.title}`} onClick={() => store.removeDependency(b.id, task.id)}><Icon name="close" size={15} /></button>
             </div>
           ))}
           <TaskPicker exclude={new Set([task.id, ...blockers.map((b) => b.id)])} placeholder="Add a task this one waits on" onPick={(id) => addDep(id, task.id)} />
         </div>
-        <h3 style={{ marginTop: 12 }}>Blocks</h3>
+        <h3 className="gap">Blocks</h3>
         <div className="linklist">
           {dependants.map((b) => (
             <div className="linkitem" key={b.id}>
               <button className="name" onClick={() => onSelect(b.id)}>{b.title}</button>
-              <span className="state">{isOpen(b) ? 'open' : STATUS_LABELS[b.status].toLowerCase()}</span>
-              <button className="iconbtn small" aria-label={`Remove ${b.title}`} onClick={() => store.removeDependency(task.id, b.id)}>✕</button>
+              <span className="state badge">{isOpen(b) ? 'open' : STATUS_LABELS[b.status].toLowerCase()}</span>
+              <button className="iconbtn" aria-label={`Remove ${b.title}`} onClick={() => store.removeDependency(task.id, b.id)}><Icon name="close" size={15} /></button>
             </div>
           ))}
           <TaskPicker exclude={new Set([task.id, ...dependants.map((b) => b.id)])} placeholder="Add a task that waits on this one" onPick={(id) => addDep(task.id, id)} />
@@ -190,10 +214,10 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
       </div>
 
       {u && (
-        <div className="section">
+        <div className="card section">
           <h3>
-            Urgency {u.score.toFixed(1)} <span className={`urg ${u.band}`} style={{ marginLeft: 6 }}>{u.band === 'now' ? 'Now' : u.band === 'soon' ? 'Soon' : 'Later'}</span>{' '}
-            <button className="iconbtn small" onClick={() => setShowWhy(!showWhy)} aria-expanded={showWhy}>{showWhy ? 'Hide' : 'Why?'}</button>
+            Urgency {u.score.toFixed(1)} <span className={`urg ${u.band}`}>{u.band === 'now' ? 'Now' : u.band === 'soon' ? 'Soon' : 'Later'}</span>{' '}
+            <button className="linkbtn push" onClick={() => setShowWhy(!showWhy)} aria-expanded={showWhy}>{showWhy ? 'Hide' : 'Why?'}</button>
           </h3>
           {showWhy && (
             <table className="breakdown">
@@ -211,12 +235,12 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
         </div>
       )}
 
-      <div className="section">
+      <div className="card section">
         <h3>Description</h3>
         <textarea className="desc" aria-label="Description" placeholder="Details, links, checklists (- [ ] item)" value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={() => desc !== task.description && update({ description: desc })} />
       </div>
 
-      <div className="section">
+      <div className="card section">
         <h3>Notes</h3>
         <div className="noteinput">
           <textarea
@@ -245,7 +269,7 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
             </div>
           ))}
         </div>
-        <div className="small muted" style={{ marginTop: 12 }}>Created {formatTimestamp(task.createdAt)}{task.dueDate && task.dueDate < today && open ? ' · overdue' : ''}</div>
+        <div className="small muted created">Created {formatTimestamp(task.createdAt)}{task.dueDate && task.dueDate < today && open ? ' · overdue' : ''}</div>
       </div>
     </div>
   );
