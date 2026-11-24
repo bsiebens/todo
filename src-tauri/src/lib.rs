@@ -208,6 +208,15 @@ pub fn run() {
                         show_main(tray.app_handle());
                     }
                 });
+            // macOS: a black-and-clear template image, which the menu bar tints to match
+            // its light or dark look like other Mac menu bar icons. Elsewhere: the app icon.
+            #[cfg(target_os = "macos")]
+            {
+                tray = tray
+                    .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?)
+                    .icon_as_template(true);
+            }
+            #[cfg(not(target_os = "macos"))]
             if let Some(icon) = app.default_window_icon() {
                 tray = tray.icon(icon.clone());
             }
