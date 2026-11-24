@@ -38,7 +38,7 @@ Data lives in `deploy/data/postgres`, backups in `deploy/backups`.
 | Setting | What |
 | --- | --- |
 | `APP_URL` | The address you open the app at, for example `https://todo.example.com`. Passkeys are tied to this host name, so choose it once. |
-| `POSTGRES_PASSWORD` | Any long random string. |
+| `POSTGRES_PASSWORD` | Any long random string, for example from `openssl rand -hex 24`. Any characters work; put it in single quotes if it contains `$`. Choose it before the first start (see Database password below). |
 | `PORT` | Port on the home server for the reverse proxy to forward to. Default 8080. |
 | `SETUP_CODE` | Optional. Your own code for setting up the first device. Otherwise one is generated and shown in the log. |
 | `OWNER_EMAIL`, `SMTP_URL`, `MAIL_FROM` | Optional. Turns on "Email me a code". Only `OWNER_EMAIL` can receive codes. `SMTP_URL` looks like `smtps://user:password@smtp.example.com:465`. |
@@ -89,6 +89,17 @@ Cloudflare Tunnel or Tailscale Funnel work too: point them at `http://localhost:
 4. **iPhone and iPad**: open the address in Safari, then Share, **Add to Home Screen**, and open the app from the Home Screen before signing in. The Home Screen app has its own storage, separate from Safari, and only the Home Screen app can show notifications.
 
 Each device can be signed out from any other device under **Signed-in devices**.
+
+### Database password
+
+Postgres stores the password the first time the `db` container starts, in `data/postgres`. Changing `POSTGRES_PASSWORD` in `.env` later does not change it, and the app then stops with "Postgres refused the password". Either put the old password back, or change it inside the database too:
+
+```sh
+docker compose exec db psql -U todo -d todo -c "ALTER USER todo PASSWORD 'the-new-password'"
+docker compose up -d
+```
+
+On a fresh install with nothing in it yet, you can also start over: `docker compose down`, delete `data/postgres`, then `docker compose up -d`.
 
 **Locked out?** (lost all devices and passkeys) On the server run
 

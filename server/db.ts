@@ -11,8 +11,43 @@ export interface Db extends Queryable {
   close(): Promise<void>;
 }
 
-export function pgDb(url: string): Db {
-  const pool = new pg.Pool({ connectionString: url, max: 5 });
+/**
+ * Where the database is. DATABASE_URL wins when set; otherwise the standard PGHOST,
+ * PGPORT, PGUSER, PGPASSWORD and PGDATABASE variables are used. Those need no URL
+ * encoding, so any password works (docker-compose.yml uses them).
+ */
+export function dbConfig(env: NodeJS.ProcessEnv): { ok: true; config: pg.PoolConfig } | { ok: false; error: string } {
+  const url = env.DATABASE_URL?.trim();
+  if (url) {
+    try {
+      const u = new URL(url);
+      if (!/^postgres(ql)?:$/.test(u.protocol)) throw new Error('not postgres');
+    } catch {
+      return {
+        ok: false,
+        error:
+          'DATABASE_URL is not a valid postgres:// address. A password with characters like # / ? @ : % must be URL-encoded there; ' +
+          'easier is to leave DATABASE_URL out and set PGHOST, PGUSER, PGPASSWORD and PGDATABASE instead (deploy/docker-compose.yml does this).',
+      };
+    }
+    return { ok: true, config: { connectionString: url } };
+  }
+  if (env.PGHOST?.trim()) return { ok: true, config: {} }; // pg reads the PG* variables itself
+  return { ok: false, error: 'No database configured: set PGHOST, PGUSER, PGPASSWORD and PGDATABASE, or DATABASE_URL. See deploy/README.md.' };
+}
+
+/** A readable hint for the usual first-start database errors. */
+export function dbErrorHint(e: unknown): string | null {
+  const code = (e as { code?: string }).code;
+  if (code === '28P01')
+    return 'Postgres refused the password. The database keeps the password it was first created with: if you changed POSTGRES_PASSWORD afterwards, change it back (or reset the database). See "Database password" in deploy/README.md.';
+  if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'Cannot reach the database. Is the db container running and healthy? (docker compose ps)';
+  if (code === '3D000') return 'The database does not exist. Check PGDATABASE / POSTGRES_DB.';
+  return null;
+}
+
+export function pgDb(config: string | pg.PoolConfig): Db {
+  const pool = new pg.Pool({ ...(typeof config === 'string' ? { connectionString: config } : config), max: 5 });
   return {
     async query<T extends Row>(sql: string, params?: unknown[]) {
       return (await pool.query(sql, params)).rows as T[];
