@@ -31,6 +31,7 @@ export function Sidebar({ view, onNavigate, open }: Props) {
       {item({ kind: 'upcoming' }, 'Upcoming')}
       {item({ kind: 'inbox' }, 'Inbox', openTasks.filter((t) => !t.projectId).length)}
       {item({ kind: 'logbook' }, 'Logbook')}
+      {item({ kind: 'analytics' }, 'Analytics')}
       <div className="navhead">
         Projects
         <button className="iconbtn small" onClick={() => onNavigate({ kind: 'projects' })}>Manage</button>

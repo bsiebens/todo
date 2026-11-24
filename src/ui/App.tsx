@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isOpen, type Id } from '../domain/types';
 import { useActions } from './actions';
+import { AnalyticsView } from './Analytics';
 import { ProjectsView, SettingsView, TagsView } from './Manage';
 import { QuickAdd } from './QuickAdd';
 import { Sidebar } from './Sidebar';
@@ -27,7 +28,7 @@ export function App() {
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  const isList = !['projects', 'tags', 'settings'].includes(view.kind);
+  const isList = !['projects', 'tags', 'settings', 'analytics'].includes(view.kind);
   const result = useMemo(() => (isList ? selectView(view, s, d, { showHidden, includeSub }) : null), [view, s, d, showHidden, includeSub, isList]);
   const flat = useMemo(() => result?.sections.flatMap((x) => x.tasks) ?? [], [result]);
 
@@ -134,6 +135,7 @@ export function App() {
 
         <main className="list">
           {view.kind === 'settings' && <SettingsView />}
+          {view.kind === 'analytics' && <AnalyticsView onNavigate={navigate} />}
           {view.kind === 'projects' && <ProjectsView onOpen={(id) => navigate({ kind: 'project', id })} />}
           {view.kind === 'tags' && <TagsView onOpen={(id) => navigate({ kind: 'tag', id })} />}
           {result && (
@@ -193,7 +195,7 @@ export function App() {
       <nav className="tabbar" aria-label="Main">
         <button className={view.kind === 'focus' ? 'active' : ''} onClick={() => navigate({ kind: 'focus' })}>Focus</button>
         <button className={view.kind === 'upcoming' ? 'active' : ''} onClick={() => navigate({ kind: 'upcoming' })}>Upcoming</button>
-        <button className={['project', 'inbox', 'tag', 'projects', 'tags', 'logbook', 'settings'].includes(view.kind) ? 'active' : ''} onClick={() => setDrawer(true)}>Browse</button>
+        <button className={['project', 'inbox', 'tag', 'projects', 'tags', 'logbook', 'analytics', 'settings'].includes(view.kind) ? 'active' : ''} onClick={() => setDrawer(true)}>Browse</button>
         <button className={view.kind === 'search' ? 'active' : ''} onClick={() => navigate({ kind: 'search', q: '' })}>Search</button>
       </nav>
 

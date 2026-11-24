@@ -11,6 +11,7 @@ export type View =
   | { kind: 'tag'; id: Id }
   | { kind: 'search'; q: string }
   | { kind: 'logbook' }
+  | { kind: 'analytics' }
   | { kind: 'projects' }
   | { kind: 'tags' }
   | { kind: 'settings' };
