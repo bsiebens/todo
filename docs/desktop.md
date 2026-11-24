@@ -4,7 +4,7 @@ The desktop app is the same app as the web version, packaged with [Tauri](https:
 
 - **Tray icon** (menu bar on a Mac): click it to open ToDo; its menu has *New task…* and *Quit ToDo*.
 - **Closing keeps it running.** The window's close button hides ToDo to the tray so reminders keep coming. `Ctrl+Q` (`⌘Q`) or the tray menu quits. You can switch this off under Settings > Desktop app.
-- **Quick add from anywhere:** `Ctrl+Alt+N` (`⌘⌥N` on a Mac) brings ToDo up with the quick-add box ready, from any app. Change or clear the shortcut under Settings > Desktop app.
+- **Quick add from anywhere:** `Ctrl+Alt+N` (`⌘⌥N` on a Mac), or *New task…* in the tray menu, opens a small one-line window on top of whatever app you are in. Type the task and press `Enter`: it goes to the Inbox and the window closes. `Esc` (or clicking elsewhere) cancels. The quick-add words still work, so `Call accountant fri 14:00 !high #finance @Work/Admin` sets the date, priority, tag and project; the line under the box shows where the task will go. The main window doesn't come up. Change or clear the shortcut under Settings > Desktop app.
 - **Reminders as system notifications**, at the due time (or the lead time before it) and a morning summary, using the same reminder settings as your other devices. They work without the sync server too, but only while ToDo runs (in the window or the tray).
 - **Start at login** (optional), straight into the tray.
 - **One copy at a time:** opening ToDo again brings the running window to the front.

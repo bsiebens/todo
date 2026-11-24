@@ -26,6 +26,32 @@ export function parsePrefs(raw: string | null): DesktopPrefs {
   }
 }
 
+/** Quick-entry window to main window: save this line as a task. */
+export const QUICK_ENTRY_SAVE = 'quick-entry-save';
+/** Main window to quick-entry window: how the save went. */
+export const QUICK_ENTRY_DONE = 'quick-entry-done';
+
+export interface QuickEntrySave {
+  id: string;
+  text: string;
+}
+
+export interface QuickEntryDone {
+  id: string;
+  ok: boolean;
+  error?: string;
+}
+
+/** The main window's answer to a quick-entry save. `add` creates the task (Inbox unless an @Project is typed). */
+export async function answerQuickEntry(req: QuickEntrySave, signedIn: boolean, add: (text: string) => Promise<string | null>): Promise<QuickEntryDone> {
+  if (!signedIn) return { id: req.id, ok: false, error: 'Sign in to ToDo first.' };
+  try {
+    return (await add(req.text)) ? { id: req.id, ok: true } : { id: req.id, ok: false, error: 'Type a name for the task.' };
+  } catch (e) {
+    return { id: req.id, ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Tasks that can get a reminder: open, with a due date. */
 export function reminderTasks(tasks: Task[]): DueTask[] {
   return tasks.filter((t) => isOpen(t) && t.dueDate).map((t) => ({ id: t.id, title: t.title || 'Task', dueDate: t.dueDate!, dueTime: t.dueTime }));

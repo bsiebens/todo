@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WindowEvent,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 /// Whether the window's close button hides to the tray (true) or quits.
@@ -26,10 +26,38 @@ fn show_main(app: &AppHandle) {
     }
 }
 
-/// Brings the window up and opens quick add.
-fn quick_add(app: &AppHandle) {
-    show_main(app);
-    let _ = app.emit_to(MAIN, "quick-add", ());
+const QUICK: &str = "quick";
+
+/// Opens the small quick-entry window: one line, centred and on top of other apps.
+/// It is made on first use and hidden, not closed, afterwards so the next open is
+/// instant. The task itself is saved by the main window, which owns the data.
+fn show_quick(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(QUICK) {
+        let _ = w.center();
+        let _ = w.show();
+        let _ = w.set_focus();
+        let _ = app.emit_to(QUICK, "quick-open", ());
+        return;
+    }
+    let built = WebviewWindowBuilder::new(app, QUICK, WebviewUrl::App("index.html#quick".into()))
+        .title("New task")
+        .inner_size(640.0, 116.0)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .decorations(false)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .skip_taskbar(true)
+        .center()
+        .focused(true)
+        // Same origin as the main window, so both share settings such as the theme.
+        .use_https_scheme(true)
+        .build();
+    if let Err(e) = built {
+        eprintln!("quick entry window failed to open: {e}");
+        show_main(app);
+    }
 }
 
 #[tauri::command]
@@ -40,6 +68,11 @@ fn set_close_to_tray(state: tauri::State<'_, CloseToTray>, enabled: bool) {
 #[tauri::command]
 fn show_window(app: AppHandle) {
     show_main(&app);
+}
+
+#[tauri::command]
+fn show_quick_entry(app: AppHandle) {
+    show_quick(&app);
 }
 
 #[tauri::command]
@@ -56,7 +89,7 @@ pub fn run() {
         builder = builder
             .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
                 if args.iter().any(|a| a == "--quick-add") {
-                    quick_add(app);
+                    show_quick(app);
                 } else {
                     show_main(app);
                 }
@@ -71,13 +104,15 @@ pub fn run() {
     builder
         .plugin(
             // Remember size and position, but not visibility: the window starts hidden and setup decides.
+            // The quick-entry window always opens centred.
             tauri_plugin_window_state::Builder::new()
                 .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE)
+                .with_denylist(&[QUICK])
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
         .manage(CloseToTray(AtomicBool::new(true)))
-        .invoke_handler(tauri::generate_handler![set_close_to_tray, show_window, quit, db::db_query, db::db_batch])
+        .invoke_handler(tauri::generate_handler![set_close_to_tray, show_window, show_quick_entry, quit, db::db_query, db::db_batch])
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -95,7 +130,7 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main(app),
-                    "quick-add" => quick_add(app),
+                    "quick-add" => show_quick(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -118,9 +153,18 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == MAIN && window.state::<CloseToTray>().0.load(Ordering::Relaxed) {
+                if window.label() == QUICK {
+                    // Alt+F4 and the like: keep the window for next time.
                     api.prevent_close();
                     let _ = window.hide();
+                } else if window.label() == MAIN {
+                    if window.state::<CloseToTray>().0.load(Ordering::Relaxed) {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else {
+                        // Closing the main window quits, also when the hidden quick-entry window exists.
+                        window.app_handle().exit(0);
+                    }
                 }
             }
         })

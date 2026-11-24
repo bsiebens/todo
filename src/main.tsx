@@ -5,6 +5,7 @@ import { Store } from './db/store';
 import { ActionsProvider } from './ui/actions';
 import { App } from './ui/App';
 import { SignInGate } from './ui/Gate';
+import { QuickEntry } from './ui/QuickEntry';
 import { StoreContext, SyncContext } from './ui/state';
 import { SyncClient } from './sync/client';
 import { refreshPush } from './sync/push';
@@ -18,6 +19,17 @@ initTheme();
 const root = createRoot(document.getElementById('root')!);
 
 async function start() {
+  // The desktop app's quick-entry window (Ctrl+Alt+N) is the same page with #quick.
+  // It does not open the database: the main window saves for it.
+  if (isDesktop && location.hash === '#quick') {
+    document.documentElement.classList.add('quick-window');
+    root.render(
+      <StrictMode>
+        <QuickEntry />
+      </StrictMode>,
+    );
+    return;
+  }
   try {
     const store = await Store.open(await (isDesktop ? createDesktopDriver() : createWorkerDriver()));
     if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
