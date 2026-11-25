@@ -1,5 +1,5 @@
 import type { Store } from '../db/store';
-import type { AuthStatus, DeviceInfo, PullResponse, PushResponse } from './protocol';
+import type { AuthStatus, DeviceInfo, Op, PullResponse, PushResponse } from './protocol';
 
 export type SyncState = 'signed_out' | 'idle' | 'syncing' | 'offline' | 'error';
 
@@ -37,6 +37,9 @@ interface Options {
 }
 
 const PUSH_BATCH = 500;
+/** validateOp messages that mean the server is older than this app. */
+const UNKNOWN_TO_SERVER = new Set(['unknown field', 'unknown entity']);
+const OLD_SERVER_NOTICE = 'Your sync server is older than this app, so some changes (such as Focus picks) wait on this device. Update the server and they will sync.';
 
 /**
  * Keeps this device in step with the sync server: pushes the local outbox, pulls
@@ -45,6 +48,7 @@ const PUSH_BATCH = 500;
  */
 export class SyncClient {
   status: SyncStatus = { state: 'signed_out', lastSync: null, error: null, pending: 0, notices: [] };
+  private warnedOldServer = false;
   private token: string | null = null;
   private listeners = new Set<() => void>();
   private running: Promise<void> | null = null;
@@ -249,6 +253,7 @@ export class SyncClient {
     this.set({ state: 'syncing' });
     try {
       // Push the outbox in batches.
+      const tooNew: Op[] = [];
       for (;;) {
         const batch = await this.store.pendingOps(PUSH_BATCH);
         if (!batch.length) break;
@@ -257,8 +262,20 @@ export class SyncClient {
         await this.store.ackOps(batch[batch.length - 1]!.seq);
         const notices = res.rejected.filter((r) => r.reason !== 'invalid').map((r) => r.message);
         if (notices.length) this.set({ notices: [...this.status.notices, ...notices] });
-        for (const r of res.rejected.filter((x) => x.reason === 'invalid')) console.warn('Server refused a change', r);
+        for (const r of res.rejected.filter((x) => x.reason === 'invalid')) {
+          // A server older than this app doesn't know a newer field yet: keep the change and send it
+          // again after the server is updated, instead of losing it.
+          if (UNKNOWN_TO_SERVER.has(r.message)) tooNew.push(r.op);
+          else console.warn('Server refused a change', r);
+        }
         if (batch.length < PUSH_BATCH) break;
+      }
+      if (tooNew.length) {
+        await this.store.requeueOps(tooNew);
+        if (!this.warnedOldServer) {
+          this.warnedOldServer = true;
+          this.set({ notices: [...this.status.notices, OLD_SERVER_NOTICE] });
+        }
       }
       // Pull everything new.
       let cursor = Number((await this.store.getSyncState('cursor')) ?? 0);

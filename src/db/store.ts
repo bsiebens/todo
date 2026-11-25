@@ -186,6 +186,12 @@ export class Store {
     await this.db.batch([{ sql: 'DELETE FROM sync_outbox WHERE seq <= ?', params: [upToSeq] }]);
   }
 
+  /** Puts ops back in the outbox to send again later, with their original clocks. */
+  async requeueOps(ops: Op[]): Promise<void> {
+    if (!ops.length) return;
+    await this.db.batch(ops.map((o) => ({ sql: 'INSERT INTO sync_outbox (entity, entity_id, field, value, hlc) VALUES (?,?,?,?,?)', params: [o.entity, o.id, o.field, o.value, o.hlc] })));
+  }
+
   async getSyncState(key: string): Promise<string | null> {
     const rows = await this.db.query('SELECT value FROM sync_state WHERE key = ?', [key]);
     return (rows[0]?.value as string | undefined) ?? null;
