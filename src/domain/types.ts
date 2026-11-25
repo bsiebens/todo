@@ -16,7 +16,9 @@ export interface Task {
   estimateMin: number | null;
   projectId: Id | null;
   seriesId: Id | null;
+  /** Starred for Focus. Only counts on the day in focusDate (Focus starts empty each morning). */
   focus: boolean;
+  focusDate: string | null; // YYYY-MM-DD the task was put in Focus
   sortKey: string;
   createdAt: string;
   updatedAt: string;

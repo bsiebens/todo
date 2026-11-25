@@ -133,6 +133,33 @@ describe('sync outbox', () => {
     expect(title.hlc > tagOps[0]!.hlc).toBe(true);
   });
 
+  it('Focus stars carry the day they were given, and sync both fields', async () => {
+    const id = await store.createTask({ title: 'Write report' });
+    await store.ackOps(Number.MAX_SAFE_INTEGER);
+    await store.setFocus([id], true);
+    const today = new Date();
+    const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    expect(store.task(id)).toMatchObject({ focus: true, focusDate: day });
+    const ops = (await store.pendingOps()).map((p) => [p.op.field, p.op.value]);
+    expect(ops).toEqual(expect.arrayContaining([['focus', '1'], ['focus_date', `"${day}"`]]));
+    await store.setFocus([id], false);
+    expect(store.task(id)).toMatchObject({ focus: false, focusDate: null });
+    await store.applyRemote([{ entity: 'task', id, field: 'focus_date', value: '"2026-11-24"', hlc: '999999999999999:0000:zzz' }]);
+    expect(store.task(id).focusDate).toBe('2026-11-24');
+  });
+
+  it('adds focus_date to a database already set up for sync', async () => {
+    const { MIGRATIONS } = await import('./schema');
+    const db = await createMemoryDriver();
+    const split = (m: string | string[]) => (Array.isArray(m) ? m : m.split(/;\s*$/m).map((x) => x.replace(/--.*$/gm, '').trim()).filter(Boolean));
+    await db.batch([...split(MIGRATIONS[0]!), ...split(MIGRATIONS[1]!)].map((sql) => ({ sql })).concat({ sql: 'PRAGMA user_version = 2' }));
+    await db.batch([{ sql: "INSERT INTO task (id, title, focus, created_at, updated_at) VALUES ('t1', 'Old star', 1, 'x', 'x')" }]);
+    const s = await Store.open(db);
+    expect(s.task('t1')).toMatchObject({ focus: true, focusDate: null });
+    await s.setFocus(['t1'], true);
+    expect((await s.pendingOps()).some((p) => p.op.field === 'focus_date')).toBe(true);
+  });
+
   it('ignores remote changes older than local ones', async () => {
     const id = await store.createTask({ title: 'Local' });
     const applied = await store.applyRemote([{ entity: 'task', id, field: 'title', value: '"Old remote"', hlc: '000000000000001:0000:zzz' }]);

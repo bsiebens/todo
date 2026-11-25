@@ -60,7 +60,7 @@ export class StoreError extends Error {
   }
 }
 
-export type TaskPatch = Partial<Pick<Task, 'title' | 'description' | 'priority' | 'dueDate' | 'dueTime' | 'startAfter' | 'estimateMin' | 'projectId' | 'focus' | 'sortKey'>>;
+export type TaskPatch = Partial<Pick<Task, 'title' | 'description' | 'priority' | 'dueDate' | 'dueTime' | 'startAfter' | 'estimateMin' | 'projectId' | 'sortKey'>>;
 
 const camel = (s: string) => s.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
@@ -372,7 +372,7 @@ export class Store {
     if (!entries.length) return;
     const st: Statement[] = [];
     const sets = entries.map(([k]) => `${snake(k)} = ?`);
-    const params = entries.map(([k, v]) => (k === 'focus' ? (v ? 1 : 0) : v));
+    const params = entries.map(([, v]) => v);
     st.push({ sql: `UPDATE task SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`, params: [...params, nowIso(), id] });
     if ('dueDate' in patch || 'dueTime' in patch) {
       const fmt = (d: string | null, tm: string | null) => (d ? `${d}${tm ? ` ${tm}` : ''}` : 'none');
@@ -385,6 +385,14 @@ export class Store {
       st.push(this.systemNote(id, `Moved to ${patch.projectId ? tree.path(patch.projectId) : 'Inbox'}`));
     }
     await this.write(st);
+  }
+
+  /** Puts tasks in today's Focus, or takes them out. */
+  async setFocus(ids: Id[], on: boolean): Promise<void> {
+    if (!ids.length) return;
+    const today = toDateStr(new Date());
+    const now = nowIso();
+    await this.write(ids.map((id) => ({ sql: 'UPDATE task SET focus = ?, focus_date = ?, updated_at = ? WHERE id = ?', params: [on ? 1 : 0, on ? today : null, now, id] })));
   }
 
   async setTags(taskId: Id, names: string[]): Promise<void> {

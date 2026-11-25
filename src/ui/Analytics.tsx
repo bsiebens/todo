@@ -75,7 +75,7 @@ export function AnalyticsView({ onNavigate }: { onNavigate: (v: View) => void })
 
       <section aria-label="Current state">
         <div className="an-tiles">
-          <Tile label="Open" value={a.counts.open} sub={`${a.counts.ready} ready to start`} onClick={() => onNavigate({ kind: 'focus' })} hint="Open tasks" />
+          <Tile label="Open" value={a.counts.open} sub={`${a.counts.ready} ready to start`} onClick={() => onNavigate({ kind: 'plan' })} hint="Open tasks" />
           <Tile label="In progress" value={a.counts.inProgress} onClick={search('status:in_progress')} />
           <Tile label="Blocked" value={a.counts.blocked} sub={a.counts.deferred ? `${a.counts.deferred} scheduled for later` : undefined} />
           <Tile label="Overdue" value={a.counts.overdue} tone={a.counts.overdue ? 'bad' : undefined} sub={a.counts.dueToday ? `${a.counts.dueToday} due today` : undefined} onClick={search('due:overdue')} />

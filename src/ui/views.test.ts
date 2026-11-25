@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, type Snapshot } from '../db/store';
 import { makeProject, makeTask } from '../domain/testing';
 import { computeDerived } from './state';
-import { selectView } from './views';
+import { selectView, type View } from './views';
 
 const snap = (tasks: Snapshot['tasks']): Snapshot => ({
   tasks,
@@ -15,29 +15,45 @@ const snap = (tasks: Snapshot['tasks']): Snapshot => ({
   settings: DEFAULT_SETTINGS,
 });
 
-const ids = (s: Snapshot, kind: 'focus' | 'inbox') => {
+const run = (s: Snapshot, view: View) => {
   const d = computeDerived(s, new Date('2026-11-25T09:00:00'));
-  const r = selectView({ kind }, s, d, { showHidden: true, includeSub: false });
-  return { ids: r.sections.flatMap((x) => x.tasks.map((t) => t.id)).sort(), hidden: r.hidden };
+  const r = selectView(view, s, d, { showHidden: false, includeSub: false });
+  return { r, section: (title: string) => (r.sections.find((x) => x.title === title)?.tasks ?? []).map((t) => t.id).sort() };
 };
 
-describe('Focus view', () => {
-  const tasks = [
-    makeTask({ id: 'plain' }), // fresh quick add, nothing set
-    makeTask({ id: 'project', projectId: 'p1' }),
-    makeTask({ id: 'due', dueDate: '2026-11-28' }),
-    makeTask({ id: 'prio', priority: 3 }),
-    makeTask({ id: 'star', focus: true }),
-    makeTask({ id: 'started', status: 'in_progress' }),
-  ];
+const tasks = [
+  makeTask({ id: 'plain' }), // fresh quick add
+  makeTask({ id: 'project', projectId: 'p1' }),
+  makeTask({ id: 'overdue', dueDate: '2026-11-20', priority: 4 }), // very urgent, not picked
+  makeTask({ id: 'picked', focus: true, focusDate: '2026-11-25' }),
+  makeTask({ id: 'yesterday', focus: true, focusDate: '2026-11-24' }), // unfinished from yesterday
+  makeTask({ id: 'started', status: 'in_progress' }),
+  makeTask({ id: 'done', status: 'done', focus: true, focusDate: '2026-11-25', completedAt: '2026-11-25T08:00:00' }),
+];
 
-  it('keeps unsorted Inbox tasks out of Focus', () => {
-    const r = ids(snap(tasks), 'focus');
-    expect(r.ids).toEqual(['due', 'prio', 'project', 'star', 'started']);
-    expect(r.hidden?.inbox).toBe(1);
+describe('Focus view (today)', () => {
+  it("shows only today's picks and tasks in progress, so it starts empty each morning", () => {
+    const { section } = run(snap(tasks), { kind: 'focus' });
+    expect(section('In progress')).toEqual(['started']);
+    expect(section('Today')).toEqual(['picked']);
   });
 
-  it('still lists them in the Inbox', () => {
-    expect(ids(snap(tasks), 'inbox').ids).toContain('plain');
+  it("counts yesterday's leftovers and urgent tasks as suggestions", () => {
+    expect(run(snap(tasks), { kind: 'focus' }).r.suggested).toBe(2);
+  });
+});
+
+describe('All open view', () => {
+  it("suggests urgent tasks and yesterday's leftovers, highest urgency first, and lists the rest", () => {
+    const { r, section } = run(snap(tasks), { kind: 'plan' });
+    expect(r.sections[0]!.tasks.map((t) => t.id)).toEqual(['overdue', 'yesterday']);
+    expect(section('Everything else')).toEqual(['plain', 'project']);
+    expect(section('Already in Focus')).toEqual(['picked', 'started']);
+  });
+
+  it('keeps low-urgency tasks out of the suggestions', () => {
+    const { section } = run(snap([makeTask({ id: 'calm' })]), { kind: 'plan' });
+    expect(section('Suggested for today')).toEqual([]);
+    expect(section('Everything else')).toEqual(['calm']);
   });
 });

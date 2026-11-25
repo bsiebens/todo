@@ -100,6 +100,7 @@ export const ENTITIES = {
       project_id: t(),
       series_id: t(),
       focus: i(false, 0, 1),
+      focus_date: t(),
       sort_key: t(false),
       created_at: t(false),
       updated_at: t(false),

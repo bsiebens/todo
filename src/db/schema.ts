@@ -1,4 +1,4 @@
-import { syncMigration } from './sync-schema';
+import { focusDateMigration, syncMigration } from './sync-schema';
 
 /**
  * Ordered migrations; PRAGMA user_version records how many have run.
@@ -93,4 +93,5 @@ export const MIGRATIONS: (string | string[])[] = [
   );
   `,
   syncMigration(),
+  focusDateMigration(),
 ];

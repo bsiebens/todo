@@ -15,7 +15,7 @@ Design: see the "ToDo App: Technical & UI Design" doc. This repository holds pha
 - Urgency score from 14 weighted factors, with a per-task breakdown and an Urgency tuning screen: presets, every factor explained, and a live preview of how your top 15 would move before you save
 - Quick add: `Call accountant fri 14:00 !high #finance @Work/Admin every month ~15m`
 - Views: Focus, Upcoming, Inbox, project, tag, Logbook, Search with filters (`#tag project:Work due<7d !high status:done`)
-- Focus lists every open task that is ready to work on, ranked by urgency. New Inbox tasks with no project, due date, priority or focus star stay in the Inbox until you sort them.
+- Focus is today's list: what you starred for today plus anything in progress. It starts empty each morning. **All open** lists every open task, suggests the most urgent ones and yesterday's leftovers first, and one click on the star puts a task in Focus
 - Saved filters: save any search under a name; it shows in the sidebar and syncs to your other devices
 - Keyboard: `j`/`k` move, `x` done, `s` start/pause, `e` edit title, `n` note, `/` search, `Ctrl/Cmd+K` quick add, `Ctrl/Cmd+P` command palette (go anywhere, act on the selected task, add or find a task), `Esc` close
 - Phone: tab bar, + button with quick-add sheet, swipe right for done, swipe left for start/pause

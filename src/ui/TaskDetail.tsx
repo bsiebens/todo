@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatTimestamp, toDateStr } from '../domain/dates';
 import { isOpen, PRIORITY_LABELS, type Id, type Priority, type Task } from '../domain/types';
+import { pickedToday } from '../domain/focus';
 import { STATUS_LABELS } from '../domain/status';
 import { StoreError } from '../db/store';
 import { useActions } from './actions';
@@ -42,6 +43,7 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
   if (!task) return <div className="empty">Select a task.</div>;
 
   const today = toDateStr(d.now);
+  const picked = pickedToday(task, today);
   const open = isOpen(task);
   const blockers = d.graph.blockersOf(task.id).map((id) => d.tasks.get(id)).filter((t): t is Task => !!t);
   const dependants = d.graph.dependantsOf(task.id).map((id) => d.tasks.get(id)).filter((t): t is Task => !!t);
@@ -115,8 +117,8 @@ export function TaskDetail({ taskId, onSelect, onClose, noteInputRef, titleInput
           </button>
         )}
         {!open && <button className="btn" onClick={() => changeStatus(task.id, 'todo')}>Reopen</button>}
-        <button className={`btn ${task.focus ? 'on' : ''}`} aria-pressed={task.focus} onClick={() => update({ focus: !task.focus })}>
-          <Icon name="star" size={16} filled={task.focus} /> Focus
+        <button className={`btn ${picked ? 'on' : ''}`} aria-pressed={picked} title={picked ? 'In Focus today' : 'Add to Focus for today'} onClick={() => void store.setFocus([task.id], !picked)}>
+          <Icon name="star" size={16} filled={picked} /> Focus
         </button>
         {open && <button className="btn" onClick={() => changeStatus(task.id, 'cancelled')}>{series ? 'Skip' : 'Cancel'}</button>}
       </div>

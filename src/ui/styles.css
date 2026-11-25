@@ -383,6 +383,14 @@ section:first-of-type > .sechead { margin-top: 6px; }
 
 .hiddenlink { border: none; background: none; color: var(--accent-text); padding: 12px 2px; font-weight: 500; }
 .hiddenlink:hover { text-decoration: underline; }
+.hiddenlink.muted { color: var(--text-2); }
+.focusfoot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; }
+.pick {
+  flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px;
+  border: none; background: none; color: var(--text-3); cursor: pointer;
+}
+.pick:hover { background: var(--hover); color: var(--text-2); }
+.pick.on, .pick.on:hover { color: var(--p2); }
 .empty { color: var(--text-2); padding: 20px 2px; }
 .welcome { background: var(--surface); border: 1px dashed var(--border-strong); border-radius: var(--radius); padding: 20px; margin-top: 12px; }
 .welcome p { margin: 0 0 10px; }
