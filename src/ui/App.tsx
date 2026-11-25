@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, toDateStr } from '../domain/dates';
 import { fuzzyFilter } from '../domain/fuzzy';
+import { pickedToday } from '../domain/focus';
 import { isOpen, PRIORITY_LABELS, type Id, type Priority } from '../domain/types';
 import { CommandPalette, type Command } from './CommandPalette';
 import { FilterHeader, SaveFilter } from './FilterBar';
@@ -147,6 +148,13 @@ export function App() {
   }, [selected]);
 
   const savedFilters = s.settings.savedFilters;
+  const clearFocus = useCallback(async () => {
+    const today = toDateStr(new Date());
+    const picked = store.snapshot.tasks.filter((t) => isOpen(t) && pickedToday(t, today));
+    if (!picked.length || !confirm(`Take ${picked.length} task${picked.length === 1 ? '' : 's'} out of Focus? Tasks in progress stay.`)) return;
+    await store.setFocus(picked.map((t) => t.id), false);
+  }, [store]);
+
   const commands = useMemo<Command[]>(() => {
     const out: Command[] = [];
     const go = (label: string, v: Parameters<typeof navigate>[0], icon: Command['icon'], keywords?: string): Command => ({
@@ -158,7 +166,8 @@ export function App() {
       run: () => navigate(v),
     });
     out.push(
-      go('Focus', { kind: 'focus' }, 'focus', 'home next'),
+      go('Focus', { kind: 'focus' }, 'focus', 'home next today'),
+      go('All open tasks', { kind: 'plan' }, 'list', 'plan review my day pick'),
       go('Upcoming', { kind: 'upcoming' }, 'upcoming', 'calendar'),
       go('Inbox', { kind: 'inbox' }, 'inbox'),
       go('Logbook', { kind: 'logbook' }, 'logbook', 'done completed history'),
@@ -183,7 +192,8 @@ export function App() {
         out.push(cur.status === 'in_progress' ? task('pause', 'Pause', 'pause', () => changeStatus(cur.id, 'todo'), 'S') : task('start', 'Start', 'play', () => changeStatus(cur.id, 'in_progress'), 'S', 'begin'));
         out.push(task('cancel', 'Cancel', 'close', () => changeStatus(cur.id, 'cancelled'), undefined, "won't do skip"));
       } else out.push(task('reopen', 'Reopen', 'repeat', () => changeStatus(cur.id, 'todo'), 'X'));
-      out.push(task('focus', cur.focus ? 'Remove focus flag from' : 'Flag for today', 'star', () => store.updateTask(cur.id, { focus: !cur.focus }), undefined, 'focus star'));
+      const curPicked = pickedToday(cur, toDateStr(new Date()));
+      out.push(task('focus', curPicked ? 'Remove from Focus:' : 'Add to Focus for today:', 'star', () => store.setFocus([cur.id], !curPicked), undefined, 'focus star today'));
       for (const p of [4, 3, 2, 1, 0] as Priority[]) if (p !== cur.priority) out.push(task(`p${p}`, `Priority ${PRIORITY_LABELS[p]}:`, 'flag', () => store.updateTask(cur.id, { priority: p }), undefined, 'priority'));
       const today = toDateStr(new Date());
       out.push(task('due0', 'Due today:', 'upcoming', () => store.updateTask(cur.id, { dueDate: today }), undefined, 'date schedule'));
@@ -197,6 +207,7 @@ export function App() {
       );
     }
 
+    out.push({ id: 'clearfocus', group: 'View', label: 'Clear Focus (unstar all of today)', icon: 'star', keywords: 'reset today fresh start', run: clearFocus });
     if (view.kind === 'focus') out.push({ id: 'hidden', group: 'View', label: showHidden ? 'Hide blocked and later tasks' : 'Show blocked and later tasks', icon: 'lock', run: () => setShowHidden(!showHidden) });
     if (view.kind === 'search' && view.q.trim()) out.push({ id: 'savefilter', group: 'View', label: `Save “${view.q.trim()}” as a filter`, icon: 'filter', run: () => document.querySelector<HTMLButtonElement>('.filterbar .btn')?.click() });
     for (const [m, label] of [['auto', 'Automatic'], ['home', 'Home'], ['office', 'Office']] as const) {
@@ -206,7 +217,7 @@ export function App() {
     out.push({ id: 'import', group: 'Data', label: 'Import tasks from another app', icon: 'upload', keywords: 'todoist ticktick csv outlook', run: () => setImporting(true) });
     out.push({ id: 'export', group: 'Data', label: 'Export everything as JSON', icon: 'logbook', keywords: 'backup download', run: () => downloadExport(store) });
     return out;
-  }, [navigate, savedFilters, d.tree, d.tasks, s.tags, selected, isList, view, showHidden, changeStatus, store, openQuickAdd, setPref]);
+  }, [navigate, savedFilters, d.tree, d.tasks, s.tags, selected, isList, view, showHidden, changeStatus, store, openQuickAdd, setPref, clearFocus]);
 
   const dynamicCommands = useCallback(
     (q: string): Command[] => {
@@ -286,6 +297,7 @@ export function App() {
                   <div className="viewhead">
                     <h1>{result.title}</h1>
                     {view.kind === 'focus' && <span className="muted viewsub">{ctx === 'office' ? 'at the office' : 'at home'}</span>}
+                    {view.kind === 'plan' && <span className="muted viewsub">star what you'll work on today</span>}
                     {view.kind === 'project' && d.tree.descendantIds(view.id).size > 0 && (
                       <label className="toggle small muted">
                         <input type="checkbox" checked={includeSub} onChange={(e) => setIncludeSub(e.target.checked)} /> include sub-projects
@@ -320,6 +332,9 @@ export function App() {
                       showProject={view.kind !== 'project'}
                       showHidden={showHidden}
                       onToggleHidden={() => setShowHidden(!showHidden)}
+                      pickable={view.kind === 'plan'}
+                      onPlan={view.kind === 'focus' ? () => navigate({ kind: 'plan' }) : undefined}
+                      onClearFocus={view.kind === 'focus' ? clearFocus : undefined}
                     />
                   )}
                   {s.tasks.length === 0 && view.kind === 'focus' && (
@@ -349,7 +364,7 @@ export function App() {
         {([
           ['Focus', 'focus', view.kind === 'focus', () => navigate({ kind: 'focus' })],
           ['Upcoming', 'upcoming', view.kind === 'upcoming', () => navigate({ kind: 'upcoming' })],
-          ['Browse', 'grid', ['project', 'inbox', 'tag', 'filter', 'projects', 'tags', 'logbook', 'analytics', 'urgency', 'settings'].includes(view.kind), () => setDrawer(true)],
+          ['Browse', 'grid', ['plan', 'project', 'inbox', 'tag', 'filter', 'projects', 'tags', 'logbook', 'analytics', 'urgency', 'settings'].includes(view.kind), () => setDrawer(true)],
           ['Search', 'search', view.kind === 'search', () => navigate({ kind: 'search', q: '' })],
         ] as const).map(([label, icon, on, go]) => (
           <button key={label} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined} onClick={go}>

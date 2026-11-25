@@ -20,7 +20,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
       { key: 'due', label: 'Due soon', help: 'Points at the due moment; grows as the date gets closer, and keeps growing for a week once overdue.', min: 0, max: 30, step: 0.5 },
       { key: 'dueHalfLifeDays', label: 'Due curve (days)', help: 'A task due this many days away gets half the due-soon points. Larger starts pushing earlier.', min: 0.5, max: 14, step: 0.5 },
       { key: 'priority', label: 'Priority', help: 'Points for Critical; High gets ¾, Medium ½, Low ¼.', min: 0, max: 20, step: 0.5 },
-      { key: 'focus', label: 'Focus flag', help: 'Tasks you flagged for today.', min: 0, max: 40, step: 1 },
+      { key: 'focus', label: 'In Focus today', help: 'Tasks you picked for today in Focus.', min: 0, max: 40, step: 1 },
       { key: 'inProgress', label: 'In progress', help: 'Tasks you already started.', min: 0, max: 20, step: 0.5 },
       { key: 'blocking', label: 'Blocking others', help: 'Points when four or more open tasks wait on this one, less for fewer.', min: 0, max: 20, step: 0.5 },
       { key: 'context', label: 'Context match', help: 'Added when the project fits where you are now (home or office), taken off when it does not.', min: 0, max: 10, step: 0.5 },

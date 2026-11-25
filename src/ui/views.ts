@@ -1,10 +1,12 @@
 import { addDays, formatDue, toDateStr } from '../domain/dates';
+import { carriedOver, inFocus, pickedToday } from '../domain/focus';
 import { isOpen, type Id, type Task } from '../domain/types';
 import type { Snapshot } from '../db/store';
 import { byUrgency, type Derived } from './state';
 
 export type View =
   | { kind: 'focus' }
+  | { kind: 'plan' }
   | { kind: 'upcoming' }
   | { kind: 'inbox' }
   | { kind: 'project'; id: Id }
@@ -27,9 +29,29 @@ export interface ViewResult {
   title: string;
   sections: Section[];
   hidden?: { blocked: number; later: number };
+  /** Focus only: how many tasks the All open list suggests for today. */
+  suggested?: number;
 }
 
+/** Most tasks the All open list suggests for today. */
+export const MAX_SUGGESTED = 10;
+
 const isDeferred = (t: Task, now: Date) => !!t.startAfter && new Date(t.startAfter) > now;
+
+/**
+ * Tasks worth adding to today, highest urgency first: everything still open from an earlier
+ * day's Focus, plus up to MAX_SUGGESTED workable tasks (not blocked or deferred) in the
+ * "now" urgency band.
+ */
+function suggestions(open: Task[], d: Derived, sortU: (a: Task, b: Task) => number): Task[] {
+  const today = toDateStr(d.now);
+  const left = open.filter((t) => carriedOver(t, today)).sort(sortU);
+  const urgent = open
+    .filter((t) => !inFocus(t, today) && !carriedOver(t, today) && !d.blocked.has(t.id) && !isDeferred(t, d.now) && d.urgency.get(t.id)?.band === 'now')
+    .sort(sortU)
+    .slice(0, MAX_SUGGESTED);
+  return [...left, ...urgent].sort(sortU);
+}
 
 export function selectView(view: View, s: Snapshot, d: Derived, opts: { showHidden: boolean; includeSub: boolean }): ViewResult {
   const open = s.tasks.filter(isOpen);
@@ -39,18 +61,30 @@ export function selectView(view: View, s: Snapshot, d: Derived, opts: { showHidd
   switch (view.kind) {
     case 'focus': {
       const inProgress = open.filter((t) => t.status === 'in_progress').sort(sortU);
-      const todo = open.filter((t) => t.status === 'todo');
-      const blocked = todo.filter((t) => d.blocked.has(t.id)).sort(sortU);
-      const later = todo.filter((t) => !d.blocked.has(t.id) && isDeferred(t, d.now)).sort(sortU);
-      const next = todo.filter((t) => !d.blocked.has(t.id) && !isDeferred(t, d.now)).sort(sortU);
+      const picked = open.filter((t) => t.status === 'todo' && pickedToday(t, today));
+      const blocked = picked.filter((t) => d.blocked.has(t.id)).sort(sortU);
+      const later = picked.filter((t) => !d.blocked.has(t.id) && isDeferred(t, d.now)).sort(sortU);
+      const ready = picked.filter((t) => !d.blocked.has(t.id) && !isDeferred(t, d.now)).sort(sortU);
       const sections: Section[] = [];
       if (inProgress.length) sections.push({ title: 'In progress', tasks: inProgress });
-      sections.push({ title: 'Next up', tasks: next });
+      sections.push({ title: 'Today', tasks: ready });
       if (opts.showHidden) {
         if (blocked.length) sections.push({ title: 'Blocked', tasks: blocked });
         if (later.length) sections.push({ title: 'Later', tasks: later });
       }
-      return { title: 'Focus', sections, hidden: { blocked: blocked.length, later: later.length } };
+      return { title: 'Focus', sections, hidden: { blocked: blocked.length, later: later.length }, suggested: suggestions(open, d, sortU).length };
+    }
+    case 'plan': {
+      const suggested = suggestions(open, d, sortU);
+      const ids = new Set(suggested.map((t) => t.id));
+      const rest = open.filter((t) => !inFocus(t, today) && !ids.has(t.id)).sort(sortU);
+      const sections: Section[] = [
+        { title: 'Suggested for today', tasks: suggested },
+        { title: 'Everything else', tasks: rest },
+      ];
+      const picked = open.filter((t) => inFocus(t, today)).sort(sortU);
+      if (picked.length) sections.push({ title: 'Already in Focus', tasks: picked });
+      return { title: 'All open tasks', sections };
     }
     case 'upcoming': {
       const dated = open.filter((t) => t.dueDate).sort((a, b) => `${a.dueDate}${a.dueTime ?? '99'}`.localeCompare(`${b.dueDate}${b.dueTime ?? '99'}`));

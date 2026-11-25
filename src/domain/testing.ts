@@ -16,6 +16,7 @@ export function makeTask(p: Partial<Task> = {}): Task {
     projectId: null,
     seriesId: null,
     focus: false,
+    focusDate: null,
     sortKey: 'a0',
     createdAt: '2026-11-24T08:00:00',
     updatedAt: '2026-11-24T08:00:00',

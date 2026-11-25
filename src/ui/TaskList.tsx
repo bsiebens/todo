@@ -1,9 +1,10 @@
 import { useRef } from 'react';
 import { formatDue, toDateStr } from '../domain/dates';
+import { carriedOver, pickedToday } from '../domain/focus';
 import { isOpen, PRIORITY_LABELS, type Id, type Task } from '../domain/types';
 import { useActions } from './actions';
 import { Icon } from './Icon';
-import { useDerived } from './state';
+import { useDerived, useStore } from './state';
 import type { ViewResult } from './views';
 
 interface Props {
@@ -14,9 +15,15 @@ interface Props {
   onToggleHidden?: () => void;
   showHidden?: boolean;
   hasAnyTasks?: boolean;
+  /** Focus: opens the All open list to pick today's tasks. */
+  onPlan?: () => void;
+  /** Focus: unstars everything picked for today. */
+  onClearFocus?: () => void;
+  /** Show a one-click star on each row to add it to (or take it out of) Focus. */
+  pickable?: boolean;
 }
 
-export function TaskList({ result, selected, onSelect, showProject, onToggleHidden, showHidden, hasAnyTasks = true }: Props) {
+export function TaskList({ result, selected, onSelect, showProject, onToggleHidden, showHidden, hasAnyTasks = true, onPlan, onClearFocus, pickable = false }: Props) {
   const total = result.sections.reduce((a, s) => a + s.tasks.length, 0);
   return (
     <>
@@ -31,11 +38,21 @@ export function TaskList({ result, selected, onSelect, showProject, onToggleHidd
           {sec.tasks.length > 0 && (
             <div className="rows">
               {sec.tasks.map((t) => (
-                <Row key={t.id} task={t} selected={selected === t.id} onSelect={onSelect} showProject={showProject} />
+                <Row key={t.id} task={t} selected={selected === t.id} onSelect={onSelect} showProject={showProject} pickable={pickable} />
               ))}
             </div>
           )}
-          {sec.tasks.length === 0 && sec.title === 'Next up' && hasAnyTasks && <div className="empty">Nothing to do right now.</div>}
+          {sec.tasks.length === 0 && sec.title === 'Today' && hasAnyTasks && (
+            <div className="empty">
+              Nothing picked for today yet.{' '}
+              {onPlan && (
+                <button className="linkbtn" onClick={onPlan}>
+                  {result.suggested ? `Review all open tasks (${result.suggested} suggested)` : 'Review all open tasks'}
+                </button>
+              )}
+            </div>
+          )}
+          {sec.tasks.length === 0 && sec.title === 'Suggested for today' && <div className="empty">Nothing urgent right now. Star anything below to add it to Focus.</div>}
         </section>
       ))}
       {total === 0 && !result.hidden && <div className="empty">No tasks here.</div>}
@@ -44,12 +61,23 @@ export function TaskList({ result, selected, onSelect, showProject, onToggleHidd
           {showHidden ? 'Hide blocked and later' : `${result.hidden.blocked} blocked, ${result.hidden.later} later: show`}
         </button>
       )}
+      {onPlan && total > 0 && (
+        <div className="focusfoot">
+          <button className="hiddenlink" onClick={onPlan}>
+            {result.suggested ? `Add more from all open tasks (${result.suggested} suggested)` : 'Add more from all open tasks'}
+          </button>
+          {onClearFocus && result.sections.some((x) => x.title === 'Today' && x.tasks.length > 0) && (
+            <button className="hiddenlink muted" onClick={onClearFocus}>Clear Focus</button>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
-function Row({ task, selected, onSelect, showProject }: { task: Task; selected: boolean; onSelect: (id: Id) => void; showProject: boolean }) {
+function Row({ task, selected, onSelect, showProject, pickable }: { task: Task; selected: boolean; onSelect: (id: Id) => void; showProject: boolean; pickable: boolean }) {
   const d = useDerived();
+  const store = useStore();
   const { changeStatus } = useActions();
   const u = d.urgency.get(task.id);
   const blocked = d.blocked.has(task.id);
@@ -59,10 +87,15 @@ function Row({ task, selected, onSelect, showProject }: { task: Task; selected: 
   const ref = useRef<HTMLDivElement>(null);
   const swipe = useRef<{ x: number; y: number; dx: number } | null>(null);
 
+  const picked = pickedToday(task, today);
   const overdue = isOpen(task) && !!task.dueDate && task.dueDate < today;
   const dueToday = isOpen(task) && task.dueDate === today;
   const meta: React.ReactNode[] = [];
   if (!isOpen(task) && task.completedAt) meta.push(<span key="st" className="badge">{task.status === 'cancelled' ? 'Cancelled' : 'Done'}</span>);
+  if (pickable && carriedOver(task, today)) {
+    const day = formatDue(task.focusDate, null, today);
+    meta.push(<span key="lo" className="meta"><Icon name="star" size={13} />Left over from {day === 'Yesterday' ? 'yesterday' : day}</span>);
+  }
   if (task.status === 'in_progress') meta.push(<span key="st" className="badge accent"><Icon name="play" size={10} />Started</span>);
   if (task.priority > 0 && isOpen(task)) meta.push(<span key="pr" className={`prio p${task.priority}`}><Icon name="flag" size={12} />{PRIORITY_LABELS[task.priority]}</span>);
   if (blocked) meta.push(<span key="bl" className="meta warn"><Icon name="lock" size={13} />Blocked by {d.graph.openBlockers(task.id, d.tasks).map((b) => b.title).join(', ')}</span>);
@@ -122,12 +155,26 @@ function Row({ task, selected, onSelect, showProject }: { task: Task; selected: 
         {!isOpen(task) ? <Icon name="check" size={14} /> : blocked ? <Icon name="lock" size={12} /> : null}
       </button>
       <div className="body">
-        <div className={`title ${task.focus ? 'focus' : ''}`}>
-          {task.focus && <Icon name="star" size={14} filled className="staricon" />}
+        <div className={`title ${picked ? 'focus' : ''}`}>
+          {picked && <Icon name="star" size={14} filled className="staricon" />}
           {task.title}
         </div>
         {meta.length > 0 && <div className="sub">{meta}</div>}
       </div>
+      {pickable && isOpen(task) && (
+        <button
+          className={`pick ${picked ? 'on' : ''}`}
+          aria-pressed={picked}
+          aria-label={picked ? `Remove ${task.title} from Focus` : `Add ${task.title} to Focus`}
+          title={picked ? 'Remove from Focus' : 'Add to Focus for today'}
+          onClick={(e) => {
+            e.stopPropagation();
+            void store.setFocus([task.id], !picked);
+          }}
+        >
+          <Icon name="star" size={18} filled={picked} />
+        </button>
+      )}
       {u && <span className={`urg ${u.band}`} title={`Urgency ${u.score.toFixed(1)} (${u.band})`}>{u.score.toFixed(1)}</span>}
     </div>
   );

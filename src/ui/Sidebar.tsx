@@ -1,3 +1,5 @@
+import { toDateStr } from '../domain/dates';
+import { inFocus } from '../domain/focus';
 import { isOpen } from '../domain/types';
 import { PALETTE_SHORTCUT } from './CommandPalette';
 import { Icon, type IconName } from './Icon';
@@ -46,7 +48,8 @@ export function Sidebar({ view, onNavigate, open, onClose, onPalette }: Props) {
         </button>
       </div>
       <div className="navscroll">
-        {item({ kind: 'focus' }, 'Focus', 'focus', openTasks.filter((t) => !d.blocked.has(t.id)).length)}
+        {item({ kind: 'focus' }, 'Focus', 'focus', openTasks.filter((t) => inFocus(t, toDateStr(d.now)) && !d.blocked.has(t.id)).length)}
+        {item({ kind: 'plan' }, 'All open', 'list', openTasks.length)}
         {item({ kind: 'upcoming' }, 'Upcoming', 'upcoming')}
         {item({ kind: 'inbox' }, 'Inbox', 'inbox', openTasks.filter((t) => !t.projectId).length)}
         {item({ kind: 'logbook' }, 'Logbook', 'logbook')}

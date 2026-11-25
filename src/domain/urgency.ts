@@ -1,5 +1,7 @@
 import type { DependencyGraph } from './dependencies';
 import type { ProjectTree } from './projects';
+import { toDateStr } from './dates';
+import { pickedToday } from './focus';
 import type { Context, Id, Task } from './types';
 
 export interface UrgencyWeights {
@@ -126,7 +128,7 @@ export function computeUrgency(input: UrgencyInput): Urgency {
   const downstream = graph.openDownstream(task.id, tasks).length;
   if (downstream > 0) add('Blocking others', `blocks ${downstream}`, (w.blocking * Math.min(downstream, 4)) / 4);
   if (graph.isBlocked(task.id, tasks)) add('Blocked', 'waiting on another task', w.blocked);
-  if (task.focus) add('Focus flag', 'flagged for today', w.focus);
+  if (pickedToday(task, toDateStr(now))) add('Focus', 'picked for today', w.focus);
   if (task.startAfter && new Date(task.startAfter) > now) add('Not yet startable', `after ${task.startAfter.slice(0, 10)}`, w.notStartable);
 
   const ctx = tree.effectiveContext(task.projectId);
