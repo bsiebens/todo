@@ -144,6 +144,8 @@ cd deploy && docker compose up -d --build
 
 Database changes run automatically at start.
 
+Update the server whenever you update the apps. The server checks every change against the fields it knows, so an older server can't store fields that a newer app added (for example the Focus day in 0.4.0). Apps from 0.4.1 keep those changes on the device and show a notice until the server is updated. Older apps drop them.
+
 ## How sync works, briefly
 
 Every edit on a device is stored as small field changes ("title of task X is now ...") stamped with a hybrid logical clock. Devices push those changes and pull what is new since their last visit. When two devices change the same field while offline, the later change wins; changes to different fields of the same task both survive. Notes never conflict. The server re-checks two rules that two offline devices could break together: a dependency loop and a project moved inside itself. It undoes the change that closed the loop, and that device shows "This link was undone because it created a loop."

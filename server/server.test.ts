@@ -1,8 +1,9 @@
 import type { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryDriver } from '../src/db/node-driver';
 import { Store } from '../src/db/store';
 import { SyncClient } from '../src/sync/client';
+import type { Op } from '../src/sync/protocol';
 import { createApp, type Mailer } from './app';
 import { Auth } from './auth';
 import type { Db } from './db';
@@ -170,6 +171,47 @@ describe('sync', () => {
       expect(d.store.task(id).title).toBe('Draft Q1 plan v2');
       expect(d.store.task(id).dueDate).toBe('2026-12-05');
     }
+    stopAll(a, b);
+  });
+
+  it("syncs today's Focus picks to the other device", async () => {
+    const { a, b } = await twoDevices();
+    const id = await a.store.createTask({ title: 'Write report' });
+    await a.sync.syncNow();
+    await b.sync.syncNow();
+    await a.store.setFocus([id], true);
+    await a.sync.syncNow();
+    await b.sync.syncNow();
+    expect(b.store.task(id)).toMatchObject({ focus: true, focusDate: a.store.task(id).focusDate });
+    await b.store.setFocus([id], false);
+    await b.sync.syncNow();
+    await a.sync.syncNow();
+    expect(a.store.task(id)).toMatchObject({ focus: false, focusDate: null });
+    stopAll(a, b);
+  });
+
+  it('keeps changes an older server does not know yet, and sends them once it is updated', async () => {
+    const { a, b } = await twoDevices();
+    const id = await a.store.createTask({ title: 'Write report' });
+    await a.sync.syncNow();
+    await b.sync.syncNow();
+    // Pretend the server predates focus_date.
+    const real = SyncService.prototype.push;
+    const spy = vi.spyOn(SyncService.prototype, 'push').mockImplementation(async function (this: SyncService, acc, dev, ops) {
+      const known = ops.filter((o) => (o as { field: string }).field !== 'focus_date');
+      const res = await real.call(this, acc, dev, known);
+      const unknown = ops.filter((o) => !known.includes(o)).map((op) => ({ op: op as Op, reason: 'invalid' as const, message: 'unknown field' }));
+      return { ...res, rejected: [...res.rejected, ...unknown] };
+    });
+    await a.store.setFocus([id], true);
+    await a.sync.syncNow();
+    expect(a.sync.status.notices.some((n) => n.includes('older than this app'))).toBe(true);
+    expect((await a.store.pendingOps()).map((p) => p.op.field)).toEqual(['focus_date']);
+    spy.mockRestore();
+    await a.sync.syncNow();
+    await b.sync.syncNow();
+    expect(b.store.task(id).focusDate).toBe(a.store.task(id).focusDate);
+    expect(await a.store.pendingOps()).toEqual([]);
     stopAll(a, b);
   });
 
