@@ -14,9 +14,10 @@ interface Props {
   onToggleHidden?: () => void;
   showHidden?: boolean;
   hasAnyTasks?: boolean;
+  onOpenInbox?: () => void;
 }
 
-export function TaskList({ result, selected, onSelect, showProject, onToggleHidden, showHidden, hasAnyTasks = true }: Props) {
+export function TaskList({ result, selected, onSelect, showProject, onToggleHidden, showHidden, hasAnyTasks = true, onOpenInbox }: Props) {
   const total = result.sections.reduce((a, s) => a + s.tasks.length, 0);
   return (
     <>
@@ -42,6 +43,11 @@ export function TaskList({ result, selected, onSelect, showProject, onToggleHidd
       {result.hidden && (result.hidden.blocked > 0 || result.hidden.later > 0) && (
         <button className="hiddenlink" onClick={onToggleHidden}>
           {showHidden ? 'Hide blocked and later' : `${result.hidden.blocked} blocked, ${result.hidden.later} later: show`}
+        </button>
+      )}
+      {result.hidden && result.hidden.inbox > 0 && onOpenInbox && (
+        <button className="hiddenlink" onClick={onOpenInbox}>
+          {result.hidden.inbox} new in the Inbox to sort: open
         </button>
       )}
     </>

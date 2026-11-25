@@ -26,8 +26,15 @@ export interface Section {
 export interface ViewResult {
   title: string;
   sections: Section[];
-  hidden?: { blocked: number; later: number };
+  hidden?: { blocked: number; later: number; inbox: number };
 }
+
+/**
+ * An Inbox task nobody has sorted yet: no project, due date, priority or focus star, and not started.
+ * These stay in the Inbox and out of Focus until you give them one of those.
+ */
+export const isUnsorted = (t: Task) =>
+  !t.projectId && !t.dueDate && t.priority === 0 && !t.focus && t.status === 'todo';
 
 const isDeferred = (t: Task, now: Date) => !!t.startAfter && new Date(t.startAfter) > now;
 
@@ -39,7 +46,9 @@ export function selectView(view: View, s: Snapshot, d: Derived, opts: { showHidd
   switch (view.kind) {
     case 'focus': {
       const inProgress = open.filter((t) => t.status === 'in_progress').sort(sortU);
-      const todo = open.filter((t) => t.status === 'todo');
+      const all = open.filter((t) => t.status === 'todo');
+      const unsorted = all.filter(isUnsorted).length;
+      const todo = all.filter((t) => !isUnsorted(t));
       const blocked = todo.filter((t) => d.blocked.has(t.id)).sort(sortU);
       const later = todo.filter((t) => !d.blocked.has(t.id) && isDeferred(t, d.now)).sort(sortU);
       const next = todo.filter((t) => !d.blocked.has(t.id) && !isDeferred(t, d.now)).sort(sortU);
@@ -50,7 +59,7 @@ export function selectView(view: View, s: Snapshot, d: Derived, opts: { showHidd
         if (blocked.length) sections.push({ title: 'Blocked', tasks: blocked });
         if (later.length) sections.push({ title: 'Later', tasks: later });
       }
-      return { title: 'Focus', sections, hidden: { blocked: blocked.length, later: later.length } };
+      return { title: 'Focus', sections, hidden: { blocked: blocked.length, later: later.length, inbox: unsorted } };
     }
     case 'upcoming': {
       const dated = open.filter((t) => t.dueDate).sort((a, b) => `${a.dueDate}${a.dueTime ?? '99'}`.localeCompare(`${b.dueDate}${b.dueTime ?? '99'}`));

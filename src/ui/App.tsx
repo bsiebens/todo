@@ -320,6 +320,7 @@ export function App() {
                       showProject={view.kind !== 'project'}
                       showHidden={showHidden}
                       onToggleHidden={() => setShowHidden(!showHidden)}
+                      onOpenInbox={() => navigate({ kind: 'inbox' })}
                     />
                   )}
                   {s.tasks.length === 0 && view.kind === 'focus' && (
